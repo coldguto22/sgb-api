@@ -9,16 +9,17 @@
     "test": "jest --detectOpenHandles --forceExit"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^8.0.0",
-    "dotenv": "^16.3.1",
+    "axios": "^1.6.0",
     "bcryptjs": "^2.4.3",
-    "axios": "^1.6.0"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "mongodb": "4.1",
+    "mongoose": "^8.0.0"
   },
   "devDependencies": {
     "jest": "^29.7.0",
-    "supertest": "^6.3.3",
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.3"
   },
   "engines": {
     "node": "18.x"
@@ -26,7 +27,13 @@
   "jest": {
     "testEnvironment": "node"
   },
-  "keywords": ["biblioteca", "api", "rest", "fatec", "sgb"],
+  "keywords": [
+    "biblioteca",
+    "api",
+    "rest",
+    "fatec",
+    "sgb"
+  ],
   "author": "Jorge Rizzini, Laisa Eugênio, Otávio Lima Beato",
   "license": "MIT"
 }
