@@ -1,0 +1,32 @@
+{
+  "name": "sgb-api",
+  "version": "2.0.0",
+  "description": "API RESTful - Sistema de Gerenciamento de Biblioteca (SGB 2.0) - FATEC Mauá",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "jest --detectOpenHandles --forceExit"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^8.0.0",
+    "dotenv": "^16.3.1",
+    "bcryptjs": "^2.4.3",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "jest": {
+    "testEnvironment": "node"
+  },
+  "keywords": ["biblioteca", "api", "rest", "fatec", "sgb"],
+  "author": "Jorge Rizzini, Laisa Eugênio, Otávio Lima Beato",
+  "license": "MIT"
+}
