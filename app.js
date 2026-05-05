@@ -49,10 +49,7 @@ app.use((req, res) => {
 
 // ── Conexão MongoDB ────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
-  mongoose.connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  });
+  mongoose.connect(process.env.MONGODB_URI);
 
   const db = mongoose.connection;
   db.on('error', console.error.bind(console, 'Erro de conexão ao MongoDB:'));
