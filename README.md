@@ -4,7 +4,7 @@
 
 API RESTful — Node.js + Express + MongoDB Atlas  
 **Autores:** Jorge Rizzini · Laisa Eugênio · Otávio Lima Beato  
-**Disciplina:** Laboratório Web 3 — DSM · FATEC Mauá
+**Disciplina:** Integração e Entrega Contínua (CI/CD) — DSM · FATEC Mauá
 
 ## Como rodar localmente
 
