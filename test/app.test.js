@@ -12,7 +12,7 @@ const Unidade = require('../models/unidade');
 const Emprestimo = require('../models/emprestimo');
 const LogOperacao = require('../models/logOperacao');
 
-function createMockQuery(result) {
+function createChainableMockQuery(result) {
   const query = Promise.resolve(result);
   query.populate = jest.fn(() => query);
   query.sort = jest.fn(() => query);
@@ -20,23 +20,23 @@ function createMockQuery(result) {
 }
 
 describe('SGB API - Testes de Rotas', () => {
-  const spies = [];
+  const mocks = [];
 
   beforeAll(() => {
-    spies.push(jest.spyOn(Categoria, 'find').mockResolvedValue([]));
-    spies.push(jest.spyOn(Categoria, 'findById').mockResolvedValue(null));
-    spies.push(jest.spyOn(Autor, 'find').mockResolvedValue([]));
-    spies.push(jest.spyOn(Usuario, 'find').mockResolvedValue([]));
-    spies.push(jest.spyOn(Usuario, 'findById').mockResolvedValue(null));
-    spies.push(jest.spyOn(Livro, 'find').mockImplementation(() => createMockQuery([])));
-    spies.push(jest.spyOn(Unidade, 'find').mockResolvedValue([]));
-    spies.push(jest.spyOn(Emprestimo, 'find').mockImplementation(() => createMockQuery([])));
-    spies.push(jest.spyOn(Emprestimo, 'updateMany').mockResolvedValue({ acknowledged: true }));
-    spies.push(jest.spyOn(LogOperacao, 'find').mockImplementation(() => createMockQuery([])));
+    mocks.push(jest.spyOn(Categoria, 'find').mockResolvedValue([]));
+    mocks.push(jest.spyOn(Categoria, 'findById').mockResolvedValue(null));
+    mocks.push(jest.spyOn(Autor, 'find').mockResolvedValue([]));
+    mocks.push(jest.spyOn(Usuario, 'find').mockResolvedValue([]));
+    mocks.push(jest.spyOn(Usuario, 'findById').mockResolvedValue(null));
+    mocks.push(jest.spyOn(Livro, 'find').mockImplementation(() => createChainableMockQuery([])));
+    mocks.push(jest.spyOn(Unidade, 'find').mockResolvedValue([]));
+    mocks.push(jest.spyOn(Emprestimo, 'find').mockImplementation(() => createChainableMockQuery([])));
+    mocks.push(jest.spyOn(Emprestimo, 'updateMany').mockResolvedValue({ acknowledged: true }));
+    mocks.push(jest.spyOn(LogOperacao, 'find').mockImplementation(() => createChainableMockQuery([])));
   });
 
   afterAll(() => {
-    spies.forEach((spy) => spy.mockRestore());
+    mocks.forEach((mock) => mock.mockRestore());
   });
 
   // ── Rota raiz ──────────────────────────────────────────
