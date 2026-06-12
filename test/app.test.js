@@ -1,11 +1,43 @@
 const request = require('supertest');
-const app = require('../app');
-
+process.env.NODE_ENV = 'test';
 const API_KEY = 'chave_super_secreta_32_bytes';
 process.env.API_KEY_SECRET = API_KEY;
-process.env.NODE_ENV = 'test';
+
+const app = require('../app');
+const Categoria = require('../models/categoria');
+const Autor = require('../models/autor');
+const Usuario = require('../models/usuario');
+const Livro = require('../models/livro');
+const Unidade = require('../models/unidade');
+const Emprestimo = require('../models/emprestimo');
+const LogOperacao = require('../models/logOperacao');
+
+function createMockQuery(result) {
+  const query = Promise.resolve(result);
+  query.populate = jest.fn(() => query);
+  query.sort = jest.fn(() => query);
+  return query;
+}
 
 describe('SGB API - Testes de Rotas', () => {
+  const spies = [];
+
+  beforeAll(() => {
+    spies.push(jest.spyOn(Categoria, 'find').mockResolvedValue([]));
+    spies.push(jest.spyOn(Categoria, 'findById').mockResolvedValue(null));
+    spies.push(jest.spyOn(Autor, 'find').mockResolvedValue([]));
+    spies.push(jest.spyOn(Usuario, 'find').mockResolvedValue([]));
+    spies.push(jest.spyOn(Usuario, 'findById').mockResolvedValue(null));
+    spies.push(jest.spyOn(Livro, 'find').mockImplementation(() => createMockQuery([])));
+    spies.push(jest.spyOn(Unidade, 'find').mockResolvedValue([]));
+    spies.push(jest.spyOn(Emprestimo, 'find').mockImplementation(() => createMockQuery([])));
+    spies.push(jest.spyOn(Emprestimo, 'updateMany').mockResolvedValue({ acknowledged: true }));
+    spies.push(jest.spyOn(LogOperacao, 'find').mockImplementation(() => createMockQuery([])));
+  });
+
+  afterAll(() => {
+    spies.forEach((spy) => spy.mockRestore());
+  });
 
   // ── Rota raiz ──────────────────────────────────────────
   describe('GET /', () => {
