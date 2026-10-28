@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Andar = require('../models/andar');
+const Estante = require('../models/estante');
+const mongoose = require('mongoose');
 const { autenticarApiKey } = require('../middleware/auth');
 
 router.get('/', autenticarApiKey, async (req, res) => {
@@ -13,6 +15,27 @@ router.get('/', autenticarApiKey, async (req, res) => {
 });
 
 router.get('/:id', autenticarApiKey, getAndar, (req, res) => res.json(res.andar));
+
+// GET /api/andares/:id/estantes — consulta pública com DTO mínimo
+router.get('/:id/estantes', async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: 'ID inválido' });
+  }
+
+  try {
+    const andar = await Andar.findById(req.params.id).select('_id');
+    if (!andar) return res.status(404).json({ message: 'Andar não encontrado' });
+
+    const estantes = await Estante.find({ id_andar: andar._id })
+      .select('_id codigo_estante descricao')
+      .sort({ codigo_estante: 1 });
+    res.json(estantes.map(({ _id, codigo_estante, descricao }) => ({
+      _id, codigo_estante, descricao,
+    })));
+  } catch (err) {
+    res.status(500).json({ message: 'Não foi possível consultar as estantes' });
+  }
+});
 
 router.post('/', autenticarApiKey, async (req, res) => {
   const andar = new Andar({
@@ -58,3 +81,4 @@ async function getAndar(req, res, next) {
 }
 
 module.exports = router;
+
