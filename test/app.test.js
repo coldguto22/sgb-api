@@ -9,6 +9,8 @@ const Autor = require('../models/autor');
 const Usuario = require('../models/usuario');
 const Livro = require('../models/livro');
 const Unidade = require('../models/unidade');
+const Andar = require('../models/andar');
+const Estante = require('../models/estante');
 const Emprestimo = require('../models/emprestimo');
 const LogOperacao = require('../models/logOperacao');
 
@@ -16,6 +18,7 @@ function createChainableMockQuery(result) {
   const query = Promise.resolve(result);
   query.populate = jest.fn(() => query);
   query.sort = jest.fn(() => query);
+  query.select = jest.fn(() => query);
   return query;
 }
 
@@ -30,6 +33,10 @@ describe('SGB API - Testes de Rotas', () => {
     mocks.push(jest.spyOn(Usuario, 'findById').mockResolvedValue(null));
     mocks.push(jest.spyOn(Livro, 'find').mockImplementation(() => createChainableMockQuery([])));
     mocks.push(jest.spyOn(Unidade, 'find').mockResolvedValue([]));
+    mocks.push(jest.spyOn(Unidade, 'findById').mockResolvedValue(null));
+    mocks.push(jest.spyOn(Andar, 'find').mockImplementation(() => createChainableMockQuery([])));
+    mocks.push(jest.spyOn(Andar, 'findById').mockImplementation((id) => createChainableMockQuery({ _id: id })));
+    mocks.push(jest.spyOn(Estante, 'find').mockImplementation(() => createChainableMockQuery([])));
     mocks.push(jest.spyOn(Emprestimo, 'find').mockImplementation(() => createChainableMockQuery([])));
     mocks.push(jest.spyOn(Emprestimo, 'updateMany').mockResolvedValue({ acknowledged: true }));
     mocks.push(jest.spyOn(LogOperacao, 'find').mockImplementation(() => createChainableMockQuery([])));
@@ -187,6 +194,52 @@ describe('SGB API - Testes de Rotas', () => {
       expect(response.statusCode).toEqual(200);
       expect(response.body).toBeInstanceOf(Array);
     });
+
+    it('lista andares sem API Key e limita a resposta ao DTO', async () => {
+      Unidade.findById.mockImplementation(() => createChainableMockQuery({ _id: '64b000000000000000000001' }));
+      Andar.find.mockImplementation(() => createChainableMockQuery([
+        { _id: '64b000000000000000000002', numero_andar: 1, nome_andar: 'Acervo', descricao: 'Interno', createdAt: 'omit' },
+      ]));
+
+      const response = await request(app).get('/api/unidades/64b000000000000000000001/andares');
+
+      expect(response.statusCode).toEqual(200);
+      expect(response.body).toEqual([
+        { _id: '64b000000000000000000002', numero_andar: 1, nome_andar: 'Acervo' },
+      ]);
+    });
+
+    it('retorna 400 para ID malformado e 404 para unidade inexistente', async () => {
+      const malformed = await request(app).get('/api/unidades/nao-e-id/andares');
+      expect(malformed.statusCode).toEqual(400);
+
+      Unidade.findById.mockImplementation(() => createChainableMockQuery(null));
+      const missing = await request(app).get('/api/unidades/64b000000000000000000001/andares');
+      expect(missing.statusCode).toEqual(404);
+    });
+
+    it('lista estantes sem API Key e limita a resposta ao DTO', async () => {
+      Andar.findById.mockImplementation(() => createChainableMockQuery({ _id: '64b000000000000000000001' }));
+      Estante.find.mockImplementation(() => createChainableMockQuery([
+        { _id: '64b000000000000000000002', codigo_estante: 'A-01', descricao: 'Ficção', coordenada_x: 42, createdAt: 'omit' },
+      ]));
+
+      const response = await request(app).get('/api/andares/64b000000000000000000001/estantes');
+
+      expect(response.statusCode).toEqual(200);
+      expect(response.body).toEqual([
+        { _id: '64b000000000000000000002', codigo_estante: 'A-01', descricao: 'Ficção' },
+      ]);
+    });
+
+    it('retorna 400 para ID malformado e 404 para andar inexistente', async () => {
+      const malformed = await request(app).get('/api/andares/nao-e-id/estantes');
+      expect(malformed.statusCode).toEqual(400);
+
+      Andar.findById.mockImplementation(() => createChainableMockQuery(null));
+      const missing = await request(app).get('/api/andares/64b000000000000000000001/estantes');
+      expect(missing.statusCode).toEqual(404);
+    });
   });
 
   // ── Empréstimos ────────────────────────────────────────
@@ -238,3 +291,4 @@ describe('SGB API - Testes de Rotas', () => {
   });
 
 });
+
