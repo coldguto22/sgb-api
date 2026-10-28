@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Unidade = require('../models/unidade');
 const Andar = require('../models/andar');
+const mongoose = require('mongoose');
 const { autenticarApiKey } = require('../middleware/auth');
 
 // GET /api/unidades — Público (documentado no SGB)
@@ -17,6 +18,23 @@ router.get('/', async (req, res) => {
 // GET /api/unidades/:id
 router.get('/:id', getUnidade, (req, res) => {
   res.json(res.unidade);
+});
+
+// GET /api/unidades/:id/andares — consulta pública com DTO mínimo
+router.get('/:id/andares', validateObjectId, async (req, res) => {
+  try {
+    const unidade = await Unidade.findById(req.params.id).select('_id');
+    if (!unidade) return res.status(404).json({ message: 'Unidade não encontrada' });
+
+    const andares = await Andar.find({ id_unidade: unidade._id })
+      .select('_id numero_andar nome_andar')
+      .sort({ numero_andar: 1 });
+    res.json(andares.map(({ _id, numero_andar, nome_andar }) => ({
+      _id, numero_andar, nome_andar,
+    })));
+  } catch (err) {
+    res.status(500).json({ message: 'Não foi possível consultar os andares' });
+  }
 });
 
 // GET /api/unidades/:id/estantes — Estantes de uma unidade (público)
@@ -88,4 +106,12 @@ async function getUnidade(req, res, next) {
   }
 }
 
+function validateObjectId(req, res, next) {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: 'ID inválido' });
+  }
+  next();
+}
+
 module.exports = router;
+

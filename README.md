@@ -31,6 +31,20 @@ npm test
 | POST | /api/emprestimos | Realiza empréstimo |
 | PUT | /api/emprestimos/:id/devolver | Registra devolução |
 | GET | /api/unidades | Lista unidades (público) |
+| GET | /api/unidades/:id/andares | Lista andares da unidade (público) |
+| GET | /api/andares/:id/estantes | Lista estantes do andar (público) |
 | GET | /api/logs | Consulta logs (requer API Key) |
 
 Autenticação via header `x-api-key`.
+
+As consultas dos andares e estantes são públicas e retornam somente os campos
+necessários ao app:
+
+- `GET /api/unidades/:id/andares` retorna `_id`, `numero_andar` e
+  `nome_andar` (opcional);
+- `GET /api/andares/:id/estantes` retorna `_id`, `codigo_estante` e
+  `descricao` (opcional).
+
+Ambas retornam `400` para IDs malformados e `404` quando a unidade ou o andar
+não existe. Recurso existente sem filhos retorna `200` com uma lista vazia.
+
