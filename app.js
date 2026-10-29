@@ -17,7 +17,9 @@ const unidadeRouter    = require('./routes/unidadeRoutes');
 const andarRouter      = require('./routes/andarRoutes');
 const estanteRouter    = require('./routes/estanteRoutes');
 const logRouter        = require('./routes/logRoutes');
+const authRouter       = require('./routes/authRoutes');
 
+app.use('/api/auth',        authRouter);
 app.use('/api/categorias',  categoriaRouter);
 app.use('/api/autores',     autorRouter);
 app.use('/api/usuarios',    usuarioRouter);
