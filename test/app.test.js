@@ -1,7 +1,9 @@
 const request = require('supertest');
+const jwt = require('jsonwebtoken');
 process.env.NODE_ENV = 'test';
 const API_KEY = 'chave_super_secreta_32_bytes';
 process.env.API_KEY_SECRET = API_KEY;
+process.env.JWT_SECRET = 'test-jwt-secret-with-at-least-32-characters';
 
 const app = require('../app');
 const Categoria = require('../models/categoria');
@@ -13,6 +15,15 @@ const Andar = require('../models/andar');
 const Estante = require('../models/estante');
 const Emprestimo = require('../models/emprestimo');
 const LogOperacao = require('../models/logOperacao');
+const USER_ID = '64b000000000000000000001';
+const BIBLIOTECARIO_TOKEN = jwt.sign(
+  { role: 'Bibliotecario', version: 0 }, process.env.JWT_SECRET,
+  { subject: USER_ID, expiresIn: '15m', issuer: 'sgb-api', audience: 'sgb-flutter' },
+);
+const ALUNO_TOKEN = jwt.sign(
+  { role: 'Aluno', version: 0 }, process.env.JWT_SECRET,
+  { subject: USER_ID, expiresIn: '15m', issuer: 'sgb-api', audience: 'sgb-flutter' },
+);
 
 function createChainableMockQuery(result) {
   const query = Promise.resolve(result);
@@ -30,7 +41,11 @@ describe('SGB API - Testes de Rotas', () => {
     mocks.push(jest.spyOn(Categoria, 'findById').mockResolvedValue(null));
     mocks.push(jest.spyOn(Autor, 'find').mockResolvedValue([]));
     mocks.push(jest.spyOn(Usuario, 'find').mockResolvedValue([]));
-    mocks.push(jest.spyOn(Usuario, 'findById').mockResolvedValue(null));
+    mocks.push(jest.spyOn(Usuario, 'findById').mockImplementation((id) => (
+      id === USER_ID
+        ? createChainableMockQuery({ _id: USER_ID, status: 'Ativo', tipo_usuario: 'Bibliotecario', token_version: 0 })
+        : null
+    )));
     mocks.push(jest.spyOn(Livro, 'find').mockImplementation(() => createChainableMockQuery([])));
     mocks.push(jest.spyOn(Unidade, 'find').mockResolvedValue([]));
     mocks.push(jest.spyOn(Unidade, 'findById').mockResolvedValue(null));
@@ -136,7 +151,7 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve retornar erro ao criar usuário com dados inválidos', async () => {
       const response = await request(app)
         .post('/api/usuarios')
-        .set('x-api-key', API_KEY)
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`)
         .send({ nome: 'Sem CPF e Email' });
       expect(response.statusCode).toEqual(400);
       expect(response.body).toHaveProperty('message');
@@ -145,9 +160,18 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve listar usuários com API Key válida', async () => {
       const response = await request(app)
         .get('/api/usuarios')
-        .set('x-api-key', API_KEY);
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`);
       expect(response.statusCode).toEqual(200);
       expect(response.body).toBeInstanceOf(Array);
+    });
+  });
+
+  describe('Autorização de usuários', () => {
+    it('nega que um aluno consulte o cadastro de outro usuário', async () => {
+      const response = await request(app)
+        .get('/api/usuarios/64b000000000000000000099')
+        .set('authorization', `Bearer ${ALUNO_TOKEN}`);
+      expect(response.statusCode).toEqual(403);
     });
   });
 
