@@ -168,6 +168,12 @@ describe('SGB API - Testes de Rotas', () => {
 
   describe('Autorização de usuários', () => {
     it('nega que um aluno consulte o cadastro de outro usuário', async () => {
+      Usuario.findById.mockImplementationOnce(() => createChainableMockQuery({
+        _id: USER_ID,
+        status: 'Ativo',
+        tipo_usuario: 'Aluno',
+        token_version: 0,
+      }));
       const response = await request(app)
         .get('/api/usuarios/64b000000000000000000099')
         .set('authorization', `Bearer ${ALUNO_TOKEN}`);
