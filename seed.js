@@ -15,9 +15,15 @@ const Emprestimo = require('./models/emprestimo');
 const LogOperacao = require('./models/logOperacao');
 
 const MONGODB_URI = process.env.MONGODB_URI;
+const SEED_PASSWORD = process.env.SEED_PASSWORD;
 
 if (!MONGODB_URI) {
   console.error('❌ MONGODB_URI não definida no .env');
+  process.exit(1);
+}
+
+if (!SEED_PASSWORD || SEED_PASSWORD.length < 12) {
+  console.error('SEED_PASSWORD deve ser informada com pelo menos 12 caracteres.');
   process.exit(1);
 }
 
@@ -68,7 +74,7 @@ const seedData = async () => {
     console.log(`📖 ${livros.length} livros inseridos`);
 
     // 4. Usuários (senha hash fixa para "123456" - só exemplo)
-    const hashSenha = await bcrypt.hash('123456', 10);
+    const hashSenha = await bcrypt.hash(SEED_PASSWORD, 12);
     const usuarios = await Usuario.insertMany([
       { nome: 'Admin Sistema', cpf: '000.000.000-00', email: 'admin@biblioteca.com', senha: hashSenha, telefone: '11999999999', tipo_usuario: 'Bibliotecario', status: 'Ativo', mfa_ativado: false },
       { nome: 'Ana Silva', cpf: '123.456.789-00', email: 'ana.silva@email.com', senha: hashSenha, telefone: '11912345678', tipo_usuario: 'Aluno', status: 'Ativo' },

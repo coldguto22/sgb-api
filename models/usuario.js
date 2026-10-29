@@ -24,7 +24,8 @@ const usuarioSchema = new mongoose.Schema({
   senha: {
     type: String,
     required: true,
-    minlength: 6,
+    minlength: 12,
+    select: false,
   },
   telefone: {
     type: String,
@@ -53,12 +54,18 @@ const usuarioSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  token_version: {
+    type: Number,
+    default: 0,
+    select: false,
+  },
 }, { timestamps: true });
 
 // Hash da senha antes de salvar
 usuarioSchema.pre('save', async function (next) {
   if (!this.isModified('senha')) return next();
-  this.senha = await bcrypt.hash(this.senha, 10);
+  const rounds = Number.parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
+  this.senha = await bcrypt.hash(this.senha, Number.isSafeInteger(rounds) ? rounds : 12);
   next();
 });
 
@@ -67,6 +74,7 @@ usuarioSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.senha;
   delete obj.mfa_secret;
+  delete obj.token_version;
   return obj;
 };
 
