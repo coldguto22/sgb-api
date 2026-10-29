@@ -3,7 +3,7 @@ const router = express.Router();
 const Emprestimo = require('../models/emprestimo');
 const Livro = require('../models/livro');
 const Usuario = require('../models/usuario');
-const { autenticarApiKey } = require('../middleware/auth');
+const { autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 const MULTA_DIARIA = parseFloat(process.env.MULTA_DIARIA || '2.00');
 const MULTA_MAXIMA = parseFloat(process.env.MULTA_MAXIMA || '50.00');
@@ -13,7 +13,7 @@ const LIMITE_ALUNO = parseInt(process.env.LIMITE_ALUNO || '3');
 const LIMITE_PROFESSOR = parseInt(process.env.LIMITE_PROFESSOR || '5');
 
 // GET /api/emprestimos
-router.get('/', autenticarApiKey, async (req, res) => {
+router.get('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   try {
     const emprestimos = await Emprestimo.find()
       .populate('id_usuario', 'nome email tipo_usuario')
@@ -25,7 +25,17 @@ router.get('/', autenticarApiKey, async (req, res) => {
 });
 
 // GET /api/emprestimos/atrasados — Empréstimos com status Atrasado
-router.get('/atrasados', autenticarApiKey, async (req, res) => {
+router.get('/meus', autenticarUsuario, async (req, res) => {
+  try {
+    const emprestimos = await Emprestimo.find({ id_usuario: req.auth.userId })
+      .populate('id_livro', 'titulo isbn');
+    res.json(emprestimos);
+  } catch (err) {
+    res.status(500).json({ message: 'Não foi possível consultar os empréstimos.' });
+  }
+});
+
+router.get('/atrasados', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   try {
     const hoje = new Date();
     // Atualiza status de atrasados
@@ -43,12 +53,12 @@ router.get('/atrasados', autenticarApiKey, async (req, res) => {
 });
 
 // GET /api/emprestimos/:id
-router.get('/:id', autenticarApiKey, getEmprestimo, (req, res) => {
+router.get('/:id', autenticarUsuario, getEmprestimo, podeAcessarEmprestimo, (req, res) => {
   res.json(res.emprestimo);
 });
 
 // POST /api/emprestimos — Realiza novo empréstimo (RF06)
-router.post('/', autenticarApiKey, async (req, res) => {
+router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   try {
     const usuario = await Usuario.findById(req.body.id_usuario);
     if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado' });
@@ -99,7 +109,7 @@ router.post('/', autenticarApiKey, async (req, res) => {
 });
 
 // PUT /api/emprestimos/:id/devolver — Registra devolução (RF07 + RF08)
-router.put('/:id/devolver', autenticarApiKey, getEmprestimo, async (req, res) => {
+router.put('/:id/devolver', autenticarUsuario, exigirPapeis('Bibliotecario'), getEmprestimo, async (req, res) => {
   if (res.emprestimo.status === 'Finalizado')
     return res.status(400).json({ message: 'Este empréstimo já foi finalizado.' });
 
@@ -134,7 +144,7 @@ router.put('/:id/devolver', autenticarApiKey, getEmprestimo, async (req, res) =>
 });
 
 // DELETE /api/emprestimos/:id
-router.delete('/:id', autenticarApiKey, getEmprestimo, async (req, res) => {
+router.delete('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getEmprestimo, async (req, res) => {
   try {
     await res.emprestimo.deleteOne();
     res.json({ message: 'Empréstimo excluído com sucesso!' });
@@ -142,6 +152,12 @@ router.delete('/:id', autenticarApiKey, getEmprestimo, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+function podeAcessarEmprestimo(req, res, next) {
+  const titularId = res.emprestimo.id_usuario?._id || res.emprestimo.id_usuario;
+  if (req.auth.role === 'Bibliotecario' || titularId?.toString() === req.auth.userId) return next();
+  return res.status(403).json({ message: 'Acesso não autorizado.' });
+}
 
 async function getEmprestimo(req, res, next) {
   try {
