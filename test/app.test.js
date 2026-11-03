@@ -274,10 +274,24 @@ describe('SGB API - Testes de Rotas', () => {
 
   // ── Empréstimos ────────────────────────────────────────
   describe('Empréstimos', () => {
+    it('permite ao usuário consultar somente a própria lista', async () => {
+      Usuario.findById.mockImplementationOnce(() => createChainableMockQuery({
+        _id: USER_ID,
+        status: 'Ativo',
+        tipo_usuario: 'Aluno',
+        token_version: 0,
+      }));
+      const response = await request(app)
+        .get('/api/emprestimos/meus')
+        .set('authorization', `Bearer ${ALUNO_TOKEN}`);
+      expect(response.statusCode).toEqual(200);
+      expect(response.body).toBeInstanceOf(Array);
+    });
+
     it('Deve listar empréstimos com API Key válida', async () => {
       const response = await request(app)
         .get('/api/emprestimos')
-        .set('x-api-key', API_KEY);
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`);
       expect(response.statusCode).toEqual(200);
       expect(response.body).toBeInstanceOf(Array);
     });
@@ -285,7 +299,7 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve listar empréstimos atrasados', async () => {
       const response = await request(app)
         .get('/api/emprestimos/atrasados')
-        .set('x-api-key', API_KEY);
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`);
       expect(response.statusCode).toEqual(200);
       expect(response.body).toBeInstanceOf(Array);
     });
@@ -293,7 +307,7 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve retornar erro ao emprestar livro com ID inválido', async () => {
       const response = await request(app)
         .post('/api/emprestimos')
-        .set('x-api-key', API_KEY)
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`)
         .send({ id_usuario: '000000000000000000000001', id_livro: '000000000000000000000002' });
       expect(response.statusCode).toBeGreaterThanOrEqual(400);
       expect(response.body).toHaveProperty('message');
