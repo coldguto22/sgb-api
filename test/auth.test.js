@@ -91,6 +91,29 @@ describe('Autenticação individual', () => {
     expect(response.body).toEqual({ message: 'Sessão inválida ou expirada.' });
   });
 
+  it('rejeita token expirado antes de consultar os dados do usuário', async () => {
+    const tokenExpirado = jwt.sign(
+      { role: 'Aluno', version: 0 },
+      tokenSecret,
+      {
+        algorithm: 'HS256',
+        subject: usuario._id,
+        expiresIn: '-1s',
+        issuer: 'sgb-api',
+        audience: 'sgb-flutter',
+      },
+    );
+    const findById = jest.spyOn(Usuario, 'findById');
+
+    const response = await request(app)
+      .get('/api/auth/me')
+      .set('authorization', `Bearer ${tokenExpirado}`);
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body).toEqual({ message: 'Sessão inválida ou expirada.' });
+    expect(findById).not.toHaveBeenCalled();
+  });
+
   it('invalida os tokens emitidos no logout', async () => {
     const token = jwt.sign(
       { role: 'Aluno', version: 0 },
