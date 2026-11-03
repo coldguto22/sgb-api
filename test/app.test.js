@@ -47,7 +47,7 @@ describe('SGB API - Testes de Rotas', () => {
         : null
     )));
     mocks.push(jest.spyOn(Livro, 'find').mockImplementation(() => createChainableMockQuery([])));
-    mocks.push(jest.spyOn(Unidade, 'find').mockResolvedValue([]));
+    mocks.push(jest.spyOn(Unidade, 'find').mockImplementation(() => createChainableMockQuery([])));
     mocks.push(jest.spyOn(Unidade, 'findById').mockResolvedValue(null));
     mocks.push(jest.spyOn(Andar, 'find').mockImplementation(() => createChainableMockQuery([])));
     mocks.push(jest.spyOn(Andar, 'findById').mockImplementation((id) => createChainableMockQuery({ _id: id })));
@@ -238,6 +238,40 @@ describe('SGB API - Testes de Rotas', () => {
       const response = await request(app).get('/api/unidades');
       expect(response.statusCode).toEqual(200);
       expect(response.body).toBeInstanceOf(Array);
+    });
+
+    it('limita unidades públicas ao DTO permitido', async () => {
+      Unidade.find.mockImplementationOnce(() => createChainableMockQuery([{
+        _id: '64b000000000000000000001', nome: 'Central', endereco: 'Rua A',
+        cidade: 'Mauá', uf: 'SP', latitude: -23.6, longitude: -46.4, status: 'Ativa',
+        cep: '00000-000', telefone: '111111111', horario_funcionamento: 'interno',
+        createdAt: 'omit', updatedAt: 'omit', __v: 0,
+      }]));
+
+      const response = await request(app).get('/api/unidades');
+
+      expect(response.statusCode).toEqual(200);
+      expect(response.body).toEqual([{
+        _id: '64b000000000000000000001', nome: 'Central', endereco: 'Rua A',
+        cidade: 'Mauá', uf: 'SP', latitude: -23.6, longitude: -46.4, status: 'Ativa',
+      }]);
+      expect(response.body[0]).not.toHaveProperty('telefone');
+      expect(response.body[0]).not.toHaveProperty('cep');
+    });
+
+    it('não expõe campos internos no detalhe público da unidade', async () => {
+      Unidade.findById.mockImplementationOnce(() => createChainableMockQuery({
+        _id: '64b000000000000000000001', nome: 'Central', endereco: 'Rua A',
+        cidade: 'Mauá', uf: 'SP', latitude: -23.6, longitude: -46.4, status: 'Ativa',
+        telefone: '111111111', horario_funcionamento: 'interno', updatedAt: 'omit',
+      }));
+
+      const response = await request(app).get('/api/unidades/64b000000000000000000001');
+
+      expect(response.statusCode).toEqual(200);
+      expect(response.body).not.toHaveProperty('telefone');
+      expect(response.body).not.toHaveProperty('horario_funcionamento');
+      expect(response.body).not.toHaveProperty('updatedAt');
     });
 
     it('lista andares sem API Key e limita a resposta ao DTO', async () => {

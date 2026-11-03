@@ -5,19 +5,25 @@ const Andar = require('../models/andar');
 const mongoose = require('mongoose');
 const { autenticarApiKey } = require('../middleware/auth');
 
+const PUBLIC_UNIT_FIELDS = '_id nome endereco cidade uf latitude longitude status';
+
+function toPublicUnit({ _id, nome, endereco, cidade, uf, latitude, longitude, status }) {
+  return { _id, nome, endereco, cidade, uf, latitude, longitude, status };
+}
+
 // GET /api/unidades — Público (documentado no SGB)
 router.get('/', async (req, res) => {
   try {
-    const unidades = await Unidade.find({ status: 'Ativa' });
-    res.json(unidades);
+    const unidades = await Unidade.find({ status: 'Ativa' }).select(PUBLIC_UNIT_FIELDS);
+    res.json(unidades.map(toPublicUnit));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
 // GET /api/unidades/:id
-router.get('/:id', getUnidade, (req, res) => {
-  res.json(res.unidade);
+router.get('/:id', validateObjectId, getPublicUnidade, (req, res) => {
+  res.json(toPublicUnit(res.unidade));
 });
 
 // GET /api/unidades/:id/andares — consulta pública com DTO mínimo
@@ -38,14 +44,23 @@ router.get('/:id/andares', validateObjectId, async (req, res) => {
 });
 
 // GET /api/unidades/:id/estantes — Estantes de uma unidade (público)
-router.get('/:id/estantes', getUnidade, async (req, res) => {
+router.get('/:id/estantes', validateObjectId, async (req, res) => {
   try {
-    const andares = await Andar.find({ id_unidade: res.unidade._id });
+    const unidade = await Unidade.findById(req.params.id).select('_id nome');
+    if (!unidade) return res.status(404).json({ message: 'Unidade não encontrada' });
+    const andares = await Andar.find({ id_unidade: unidade._id })
+      .select('_id numero_andar nome_andar');
     const andarIds = andares.map(a => a._id);
     const Estante = require('../models/estante');
     const estantes = await Estante.find({ id_andar: { $in: andarIds } })
-      .populate('id_andar', 'numero_andar nome_andar');
-    res.json({ unidade: res.unidade.nome, andares, estantes });
+      .select('_id id_andar codigo_estante descricao');
+    res.json({
+      unidade: { _id: unidade._id, nome: unidade.nome },
+      andares: andares.map(({ _id, numero_andar, nome_andar }) => ({ _id, numero_andar, nome_andar })),
+      estantes: estantes.map(({ _id, id_andar, codigo_estante, descricao }) => ({
+        _id, id_andar, codigo_estante, descricao,
+      })),
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -103,6 +118,17 @@ async function getUnidade(req, res, next) {
     next();
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+}
+
+async function getPublicUnidade(req, res, next) {
+  try {
+    const unidade = await Unidade.findById(req.params.id).select(PUBLIC_UNIT_FIELDS);
+    if (!unidade) return res.status(404).json({ message: 'Unidade não encontrada' });
+    res.unidade = unidade;
+    next();
+  } catch (err) {
+    res.status(500).json({ message: 'Não foi possível consultar a unidade' });
   }
 }
 
