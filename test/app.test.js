@@ -167,6 +167,21 @@ describe('SGB API - Testes de Rotas', () => {
   });
 
   describe('Autorização de usuários', () => {
+    it('nega que um aluno liste os cadastros de usuários', async () => {
+      Usuario.findById.mockImplementationOnce(() => createChainableMockQuery({
+        _id: USER_ID,
+        status: 'Ativo',
+        tipo_usuario: 'Aluno',
+        token_version: 0,
+      }));
+      const response = await request(app)
+        .get('/api/usuarios')
+        .set('authorization', `Bearer ${ALUNO_TOKEN}`);
+
+      expect(response.statusCode).toEqual(403);
+      expect(response.body).toEqual({ message: 'Acesso não autorizado.' });
+    });
+
     it('nega que um aluno consulte o cadastro de outro usuário', async () => {
       Usuario.findById.mockImplementationOnce(() => createChainableMockQuery({
         _id: USER_ID,
