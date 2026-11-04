@@ -138,4 +138,28 @@ describe('Autenticação individual', () => {
       $inc: { token_version: 1 },
     });
   });
+
+  it('atualiza apenas os campos permitidos do próprio perfil', async () => {
+    const token = jwt.sign(
+      { role: 'Aluno', version: 0 }, tokenSecret,
+      { subject: usuario._id, expiresIn: '15m', issuer: 'sgb-api', audience: 'sgb-flutter' },
+    );
+    const perfil = {
+      ...usuario,
+      telefone: null,
+      save: jest.fn().mockImplementation(async function save() { return this; }),
+    };
+    jest.spyOn(Usuario, 'findById').mockReturnValue(query(perfil));
+
+    const response = await request(app)
+      .put('/api/auth/me')
+      .set('authorization', `Bearer ${token}`)
+      .send({ nome: 'Ana Atualizada', telefone: '11999999999', tipo_usuario: 'Bibliotecario' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toEqual(expect.objectContaining({
+      id: usuario._id, nome: 'Ana Atualizada', telefone: '11999999999', tipo_usuario: 'Aluno',
+    }));
+    expect(perfil.save).toHaveBeenCalledTimes(1);
+  });
 });
