@@ -337,6 +337,31 @@ describe('SGB API - Testes de Rotas', () => {
       expect(response.body).toBeInstanceOf(Array);
     });
 
+    it('calcula atraso e multa no servidor para o titular', async () => {
+      Usuario.findById.mockImplementationOnce(() => createChainableMockQuery({
+        _id: USER_ID, status: 'Ativo', tipo_usuario: 'Aluno', token_version: 0,
+      }));
+      Emprestimo.find.mockImplementationOnce(() => createChainableMockQuery([{
+        _id: 'loan-1', status: 'Ativo', valor_multa: 0,
+        data_prevista_devolucao: '2000-01-01T00:00:00.000Z',
+        id_livro: { _id: 'book-1', titulo: 'Dom Casmurro', isbn: '123' },
+        id_usuario: 'outro-usuario', createdAt: 'omit',
+      }]));
+
+      const response = await request(app)
+        .get('/api/emprestimos/meus')
+        .set('authorization', `Bearer ${ALUNO_TOKEN}`);
+
+      expect(response.statusCode).toEqual(200);
+      expect(response.body).toEqual([{
+        _id: 'loan-1',
+        id_livro: { _id: 'book-1', titulo: 'Dom Casmurro', isbn: '123' },
+        data_prevista_devolucao: '2000-01-01T00:00:00.000Z',
+        status: 'Atrasado', valor_multa: 50,
+      }]);
+      expect(response.body[0]).not.toHaveProperty('id_usuario');
+    });
+
     it('Deve listar empréstimos com API Key válida', async () => {
       const response = await request(app)
         .get('/api/emprestimos')

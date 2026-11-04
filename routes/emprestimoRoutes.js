@@ -29,11 +29,31 @@ router.get('/meus', autenticarUsuario, async (req, res) => {
   try {
     const emprestimos = await Emprestimo.find({ id_usuario: req.auth.userId })
       .populate('id_livro', 'titulo isbn');
-    res.json(emprestimos);
+    res.json(emprestimos.map(resumoEmprestimoDoTitular));
   } catch (err) {
     res.status(500).json({ message: 'Não foi possível consultar os empréstimos.' });
   }
 });
+
+function resumoEmprestimoDoTitular(emprestimo) {
+  const prevista = new Date(emprestimo.data_prevista_devolucao);
+  const estaEmAtraso = emprestimo.status !== 'Finalizado' && prevista < new Date();
+  const diasAtraso = estaEmAtraso
+    ? Math.ceil((Date.now() - prevista.getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const multaCalculada = estaEmAtraso
+    ? Math.min(diasAtraso * MULTA_DIARIA, MULTA_MAXIMA)
+    : emprestimo.valor_multa || 0;
+  const livro = emprestimo.id_livro || {};
+
+  return {
+    _id: emprestimo._id,
+    id_livro: { _id: livro._id, titulo: livro.titulo, isbn: livro.isbn },
+    data_prevista_devolucao: emprestimo.data_prevista_devolucao,
+    status: estaEmAtraso ? 'Atrasado' : emprestimo.status,
+    valor_multa: multaCalculada,
+  };
+}
 
 router.get('/atrasados', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   try {
