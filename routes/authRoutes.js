@@ -52,12 +52,30 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.get('/me', autenticarUsuario, async (req, res) => {
   try {
     const usuario = await Usuario.findById(req.auth.userId).select(
-      'nome email tipo_usuario status',
+      'nome email telefone tipo_usuario status',
     );
     if (!usuario) return res.status(401).json({ message: 'Sessão inválida ou expirada.' });
-    return res.json(usuario);
+    return res.json(perfilPublico(usuario));
   } catch (_) {
     return res.status(503).json({ message: 'Serviço de autenticação indisponível.' });
+  }
+});
+
+router.put('/me', autenticarUsuario, async (req, res) => {
+  try {
+    const usuario = await Usuario.findById(req.auth.userId).select(
+      'nome email telefone tipo_usuario status',
+    );
+    if (!usuario) return res.status(401).json({ message: 'Sessão inválida ou expirada.' });
+
+    if (typeof req.body.nome === 'string') usuario.nome = req.body.nome.trim();
+    if (typeof req.body.email === 'string') usuario.email = req.body.email.trim().toLowerCase();
+    if (typeof req.body.telefone === 'string') usuario.telefone = req.body.telefone.trim();
+
+    const atualizado = await usuario.save();
+    return res.json(perfilPublico(atualizado));
+  } catch (_) {
+    return res.status(400).json({ message: 'Não foi possível atualizar o perfil.' });
   }
 });
 
@@ -69,5 +87,16 @@ router.post('/logout', autenticarUsuario, async (req, res) => {
     return res.status(503).json({ message: 'Serviço de autenticação indisponível.' });
   }
 });
+
+function perfilPublico(usuario) {
+  return {
+    id: usuario._id,
+    nome: usuario.nome,
+    email: usuario.email,
+    telefone: usuario.telefone || null,
+    tipo_usuario: usuario.tipo_usuario,
+    status: usuario.status,
+  };
+}
 
 module.exports = router;
