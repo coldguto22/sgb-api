@@ -1,7 +1,74 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Livro = require('../models/livro');
 const { autenticarApiKey } = require('../middleware/auth');
+
+const MAX_PAGE_SIZE = 50;
+
+// GET /api/livros/catalogo — consulta paginada para o client, com filtros allowlist.
+router.get('/catalogo', autenticarApiKey, async (req, res) => {
+  const pagina = parsePositiveInteger(req.query.pagina, 1);
+  const limite = Math.min(parsePositiveInteger(req.query.limite, 20), MAX_PAGE_SIZE);
+  const filtro = {};
+
+  if (req.query.categoria != null) {
+    if (!mongoose.Types.ObjectId.isValid(req.query.categoria)) {
+      return res.status(400).json({ message: 'Categoria inválida.' });
+    }
+    filtro.id_categoria = req.query.categoria;
+  }
+  if (req.query.autor != null) {
+    if (!mongoose.Types.ObjectId.isValid(req.query.autor)) {
+      return res.status(400).json({ message: 'Autor inválido.' });
+    }
+    filtro.autores = req.query.autor;
+  }
+  if (req.query.disponivel != null) {
+    if (req.query.disponivel !== 'true' && req.query.disponivel !== 'false') {
+      return res.status(400).json({ message: 'Filtro de disponibilidade inválido.' });
+    }
+    if (req.query.disponivel === 'true') filtro.quantidade_disponivel = { $gt: 0 };
+  }
+
+  try {
+    const [livros, total] = await Promise.all([
+      Livro.find(filtro)
+        .select('_id titulo autores quantidade_disponivel id_categoria')
+        .populate('autores', 'nome')
+        .populate('id_categoria', 'nome')
+        .sort({ titulo: 1 })
+        .skip((pagina - 1) * limite)
+        .limit(limite),
+      Livro.countDocuments(filtro),
+    ]);
+    return res.json({
+      items: livros.map(toCatalogItem),
+      pagina,
+      limite,
+      total,
+    });
+  } catch (_) {
+    return res.status(500).json({ message: 'Não foi possível consultar o catálogo.' });
+  }
+});
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function toCatalogItem(livro) {
+  return {
+    _id: livro._id,
+    titulo: livro.titulo,
+    autores: (livro.autores || []).map(({ nome }) => ({ nome })),
+    quantidade_disponivel: livro.quantidade_disponivel,
+    id_categoria: livro.id_categoria
+      ? { _id: livro.id_categoria._id, nome: livro.id_categoria.nome }
+      : null,
+  };
+}
 
 // GET /api/livros — Lista todos os livros (com populate de categoria e autores)
 router.get('/', autenticarApiKey, async (req, res) => {

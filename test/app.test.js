@@ -30,6 +30,8 @@ function createChainableMockQuery(result) {
   query.populate = jest.fn(() => query);
   query.sort = jest.fn(() => query);
   query.select = jest.fn(() => query);
+  query.skip = jest.fn(() => query);
+  query.limit = jest.fn(() => query);
   return query;
 }
 
@@ -47,6 +49,7 @@ describe('SGB API - Testes de Rotas', () => {
         : null
     )));
     mocks.push(jest.spyOn(Livro, 'find').mockImplementation(() => createChainableMockQuery([])));
+    mocks.push(jest.spyOn(Livro, 'countDocuments').mockResolvedValue(0));
     mocks.push(jest.spyOn(Unidade, 'find').mockImplementation(() => createChainableMockQuery([])));
     mocks.push(jest.spyOn(Unidade, 'findById').mockResolvedValue(null));
     mocks.push(jest.spyOn(Andar, 'find').mockImplementation(() => createChainableMockQuery([])));
@@ -198,6 +201,38 @@ describe('SGB API - Testes de Rotas', () => {
 
   // ── Livros ─────────────────────────────────────────────
   describe('Livros', () => {
+    it('filtra e pagina o catálogo usando somente o DTO da listagem', async () => {
+      Livro.find.mockImplementationOnce(() => createChainableMockQuery([{
+        _id: 'book-1', titulo: 'Dom Casmurro', quantidade_disponivel: 2,
+        autores: [{ nome: 'Machado de Assis', nacionalidade: 'omit' }],
+        id_categoria: { _id: '64b000000000000000000010', nome: 'Romance', descricao: 'omit' },
+        isbn: 'omit', createdAt: 'omit',
+      }]));
+      Livro.countDocuments.mockResolvedValueOnce(1);
+
+      const response = await request(app)
+        .get('/api/livros/catalogo?categoria=64b000000000000000000010&autor=64b000000000000000000011&disponivel=true&pagina=2&limite=10')
+        .set('x-api-key', API_KEY);
+
+      expect(response.statusCode).toEqual(200);
+      expect(response.body).toEqual({
+        items: [{
+          _id: 'book-1', titulo: 'Dom Casmurro', quantidade_disponivel: 2,
+          autores: [{ nome: 'Machado de Assis' }],
+          id_categoria: { _id: '64b000000000000000000010', nome: 'Romance' },
+        }],
+        pagina: 2, limite: 10, total: 1,
+      });
+      expect(response.body.items[0]).not.toHaveProperty('isbn');
+    });
+
+    it('rejeita filtros de catálogo inválidos', async () => {
+      const response = await request(app)
+        .get('/api/livros/catalogo?disponivel=talvez')
+        .set('x-api-key', API_KEY);
+      expect(response.statusCode).toEqual(400);
+    });
+
     it('Deve listar livros disponíveis (GET /api/livros/disponiveis)', async () => {
       const response = await request(app)
         .get('/api/livros/disponiveis')
