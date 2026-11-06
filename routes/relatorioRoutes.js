@@ -42,4 +42,26 @@ router.get('/multas', autenticarUsuario, exigirPapeis('Bibliotecario'), async (_
     res.json(resultado || { quantidade: 0, valor_total: 0 });
   } catch (_) { res.status(500).json({ message: 'Não foi possível gerar o relatório.' }); }
 });
+
+router.get('/emprestimos', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  const inicio = req.query.inicio ? new Date(req.query.inicio) : null;
+  const fim = req.query.fim ? new Date(req.query.fim) : null;
+  if ((inicio && Number.isNaN(inicio.getTime())) || (fim && Number.isNaN(fim.getTime()))) {
+    return res.status(400).json({ message: 'Período inválido.' });
+  }
+  try {
+    const filtro = {};
+    if (inicio || fim) filtro.data_emprestimo = { ...(inicio && { $gte: inicio }), ...(fim && { $lte: fim }) };
+    const emprestimos = await Emprestimo.find(filtro)
+      .populate('id_usuario', 'nome tipo_usuario')
+      .populate('id_livro', 'titulo isbn');
+    res.json(emprestimos.map((item) => ({
+      _id: item._id, data_emprestimo: item.data_emprestimo,
+      data_prevista_devolucao: item.data_prevista_devolucao, status: item.status,
+      valor_multa: item.valor_multa || 0,
+      usuario: item.id_usuario ? { nome: item.id_usuario.nome, tipo_usuario: item.id_usuario.tipo_usuario } : null,
+      livro: item.id_livro ? { titulo: item.id_livro.titulo, isbn: item.id_livro.isbn } : null,
+    })));
+  } catch (_) { res.status(500).json({ message: 'Não foi possível gerar o relatório.' }); }
+});
 module.exports = router;
