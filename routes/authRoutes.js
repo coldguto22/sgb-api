@@ -1,8 +1,10 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const Usuario = require('../models/usuario');
 const { autenticarUsuario, criarTokenAcesso } = require('../middleware/auth');
+const { sendPasswordResetEmail } = require('../services/passwordResetEmail');
 
 const router = express.Router();
 
@@ -12,6 +14,79 @@ const loginLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: { message: 'Muitas tentativas. Tente novamente mais tarde.' },
+});
+
+const passwordRecoveryLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Muitas tentativas. Tente novamente mais tarde.' },
+});
+
+const passwordResetLifetimeMs = 30 * 60 * 1000;
+const recoveryMessage = {
+  message: 'Se houver uma conta ativa para este e-mail, enviaremos as instruções de recuperação.',
+};
+
+function hashResetToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+router.post('/recuperacao-senha', passwordRecoveryLimiter, async (req, res) => {
+  const email = typeof req.body.email === 'string'
+    ? req.body.email.trim().toLowerCase()
+    : '';
+  if (!email) return res.status(202).json(recoveryMessage);
+
+  try {
+    const usuario = await Usuario.findOne({ email }).select(
+      '+password_reset_token_hash +password_reset_expires_at',
+    );
+    if (!usuario || usuario.status !== 'Ativo') {
+      return res.status(202).json(recoveryMessage);
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    usuario.password_reset_token_hash = hashResetToken(token);
+    usuario.password_reset_expires_at = new Date(Date.now() + passwordResetLifetimeMs);
+    await usuario.save();
+    try {
+      await sendPasswordResetEmail({ to: usuario.email, token });
+    } catch (_) {
+      usuario.password_reset_token_hash = null;
+      usuario.password_reset_expires_at = null;
+      await usuario.save();
+      return res.status(503).json({ message: 'Serviço de recuperação indisponível.' });
+    }
+    return res.status(202).json(recoveryMessage);
+  } catch (_) {
+    return res.status(503).json({ message: 'Serviço de recuperação indisponível.' });
+  }
+});
+
+router.post('/recuperacao-senha/confirmar', async (req, res) => {
+  const token = typeof req.body.token === 'string' ? req.body.token : '';
+  const senha = typeof req.body.senha === 'string' ? req.body.senha : '';
+  if (!token || senha.length < 12) {
+    return res.status(400).json({ message: 'Token e senha válida são obrigatórios.' });
+  }
+  try {
+    const usuario = await Usuario.findOne({
+      password_reset_token_hash: hashResetToken(token),
+      password_reset_expires_at: { $gt: new Date() },
+    }).select('+senha +token_version +password_reset_token_hash +password_reset_expires_at');
+    if (!usuario) {
+      return res.status(400).json({ message: 'Token inválido ou expirado.' });
+    }
+    usuario.senha = senha;
+    usuario.password_reset_token_hash = null;
+    usuario.password_reset_expires_at = null;
+    usuario.token_version = (usuario.token_version || 0) + 1;
+    await usuario.save();
+    return res.status(204).send();
+  } catch (_) {
+    return res.status(503).json({ message: 'Serviço de recuperação indisponível.' });
+  }
 });
 
 router.post('/login', loginLimiter, async (req, res) => {
