@@ -59,6 +59,16 @@ const usuarioSchema = new mongoose.Schema({
     default: 0,
     select: false,
   },
+  password_reset_token_hash: {
+    type: String,
+    default: null,
+    select: false,
+  },
+  password_reset_expires_at: {
+    type: Date,
+    default: null,
+    select: false,
+  },
 }, { timestamps: true });
 
 // Hash da senha antes de salvar

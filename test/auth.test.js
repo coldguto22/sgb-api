@@ -2,11 +2,16 @@ const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
+jest.mock('../services/passwordResetEmail', () => ({
+  sendPasswordResetEmail: jest.fn(),
+}));
+
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = 'test-jwt-secret-with-at-least-32-characters';
 
 const app = require('../app');
 const Usuario = require('../models/usuario');
+const { sendPasswordResetEmail } = require('../services/passwordResetEmail');
 
 const tokenSecret = process.env.JWT_SECRET;
 
@@ -27,7 +32,9 @@ describe('Autenticação individual', () => {
       tipo_usuario: 'Aluno',
       status: 'Ativo',
       token_version: 0,
+      save: jest.fn().mockImplementation(async function save() { return this; }),
     };
+    sendPasswordResetEmail.mockReset();
   });
 
   afterEach(() => jest.restoreAllMocks());
@@ -161,5 +168,54 @@ describe('Autenticação individual', () => {
       id: usuario._id, nome: 'Ana Atualizada', telefone: '11999999999', tipo_usuario: 'Aluno',
     }));
     expect(perfil.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('não revela se existe uma conta na solicitação de recuperação', async () => {
+    jest.spyOn(Usuario, 'findOne').mockReturnValue(query(null));
+
+    const response = await request(app)
+      .post('/api/auth/recuperacao-senha')
+      .send({ email: 'inexistente@example.test' });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.body).toEqual({
+      message: 'Se houver uma conta ativa para este e-mail, enviaremos as instruções de recuperação.',
+    });
+    expect(sendPasswordResetEmail).not.toHaveBeenCalled();
+  });
+
+  it('armazena apenas o hash do token e envia o token aleatório por e-mail', async () => {
+    jest.spyOn(Usuario, 'findOne').mockReturnValue(query(usuario));
+    sendPasswordResetEmail.mockResolvedValue(undefined);
+
+    const response = await request(app)
+      .post('/api/auth/recuperacao-senha')
+      .send({ email: usuario.email });
+
+    expect(response.statusCode).toBe(202);
+    expect(usuario.password_reset_token_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(usuario.password_reset_expires_at).toBeInstanceOf(Date);
+    expect(sendPasswordResetEmail).toHaveBeenCalledWith({
+      to: usuario.email,
+      token: expect.stringMatching(/^[a-f0-9]{64}$/),
+    });
+    expect(usuario.password_reset_token_hash).not.toBe(
+      sendPasswordResetEmail.mock.calls[0][0].token,
+    );
+  });
+
+  it('redefine a senha, remove o token e revoga sessões anteriores', async () => {
+    const token = 'a'.repeat(64);
+    jest.spyOn(Usuario, 'findOne').mockReturnValue(query(usuario));
+
+    const response = await request(app)
+      .post('/api/auth/recuperacao-senha/confirmar')
+      .send({ token, senha: 'Nova-senha-segura-123' });
+
+    expect(response.statusCode).toBe(204);
+    expect(usuario.senha).toBe('Nova-senha-segura-123');
+    expect(usuario.password_reset_token_hash).toBeNull();
+    expect(usuario.password_reset_expires_at).toBeNull();
+    expect(usuario.token_version).toBe(1);
   });
 });
