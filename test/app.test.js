@@ -535,7 +535,7 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve listar logs com API Key válida', async () => {
       const response = await request(app)
         .get('/api/logs')
-        .set('x-api-key', API_KEY);
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`);
       expect(response.statusCode).toEqual(200);
       expect(response.body).toBeInstanceOf(Array);
     });
@@ -543,7 +543,7 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve retornar erro ao criar log sem operação', async () => {
       const response = await request(app)
         .post('/api/logs')
-        .set('x-api-key', API_KEY)
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`)
         .send({ id_usuario: null });
       expect(response.statusCode).toEqual(400);
       expect(response.body).toHaveProperty('message');
