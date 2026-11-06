@@ -147,6 +147,25 @@ router.get('/localizacao/:id', async (req, res) => {
 });
 
 // GET /api/livros/:id
+router.get('/:id/recomendacoes', autenticarApiKey, async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Livro inválido.' });
+  try {
+    const livro = await Livro.findById(req.params.id).select('id_categoria');
+    if (!livro) return res.status(404).json({ message: 'Livro não encontrado.' });
+    const filtro = { _id: { $ne: livro._id } };
+    if (livro.id_categoria) filtro.id_categoria = livro.id_categoria;
+    const recomendados = await Livro.find(filtro)
+      .select('_id titulo autores quantidade_disponivel')
+      .populate('autores', 'nome')
+      .sort({ quantidade_disponivel: -1, titulo: 1 })
+      .limit(6);
+    res.json(recomendados.map((item) => ({
+      _id: item._id, titulo: item.titulo,
+      autores: (item.autores || []).map((autor) => ({ nome: autor.nome })),
+      quantidade_disponivel: item.quantidade_disponivel,
+    })));
+  } catch (_) { res.status(500).json({ message: 'Não foi possível gerar recomendações.' }); }
+});
 router.get('/:id', autenticarApiKey, getLivro, (req, res) => {
   res.json(res.livro);
 });
