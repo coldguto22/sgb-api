@@ -129,7 +129,7 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve retornar erro ao criar categoria sem nome (POST /api/categorias)', async () => {
       const response = await request(app)
         .post('/api/categorias')
-        .set('x-api-key', API_KEY)
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`)
         .send({ descricao: 'Sem nome' });
       expect(response.statusCode).toEqual(400);
       expect(response.body).toHaveProperty('message');
@@ -149,7 +149,7 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve retornar erro ao criar autor sem nome', async () => {
       const response = await request(app)
         .post('/api/autores')
-        .set('x-api-key', API_KEY)
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`)
         .send({ nacionalidade: 'Brasileira' });
       expect(response.statusCode).toEqual(400);
       expect(response.body).toHaveProperty('message');

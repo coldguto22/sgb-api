@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Categoria = require('../models/categoria');
-const { autenticarApiKey } = require('../middleware/auth');
+const { autenticarApiKey, autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 // GET /api/categorias — Lista todas as categorias
 router.get('/', autenticarApiKey, async (req, res) => {
@@ -19,7 +19,7 @@ router.get('/:id', autenticarApiKey, getCategoria, (req, res) => {
 });
 
 // POST /api/categorias — Cria nova categoria
-router.post('/', autenticarApiKey, async (req, res) => {
+router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   const categoria = new Categoria({
     nome: req.body.nome,
     descricao: req.body.descricao,
@@ -33,7 +33,7 @@ router.post('/', autenticarApiKey, async (req, res) => {
 });
 
 // PUT /api/categorias/:id — Atualiza categoria
-router.put('/:id', autenticarApiKey, getCategoria, async (req, res) => {
+router.put('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getCategoria, async (req, res) => {
   if (req.body.nome != null)      res.categoria.nome = req.body.nome;
   if (req.body.descricao != null) res.categoria.descricao = req.body.descricao;
   try {
@@ -45,7 +45,7 @@ router.put('/:id', autenticarApiKey, getCategoria, async (req, res) => {
 });
 
 // DELETE /api/categorias/:id — Remove categoria
-router.delete('/:id', autenticarApiKey, getCategoria, async (req, res) => {
+router.delete('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getCategoria, async (req, res) => {
   try {
     await res.categoria.deleteOne();
     res.json({ message: 'Categoria excluída com sucesso!' });

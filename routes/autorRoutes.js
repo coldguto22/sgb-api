@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Autor = require('../models/autor');
-const { autenticarApiKey } = require('../middleware/auth');
+const { autenticarApiKey, autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 // GET /api/autores
 router.get('/', autenticarApiKey, async (req, res) => {
@@ -19,7 +19,7 @@ router.get('/:id', autenticarApiKey, getAutor, (req, res) => {
 });
 
 // POST /api/autores
-router.post('/', autenticarApiKey, async (req, res) => {
+router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   const autor = new Autor({
     nome: req.body.nome,
     nacionalidade: req.body.nacionalidade,
@@ -33,7 +33,7 @@ router.post('/', autenticarApiKey, async (req, res) => {
 });
 
 // PUT /api/autores/:id
-router.put('/:id', autenticarApiKey, getAutor, async (req, res) => {
+router.put('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getAutor, async (req, res) => {
   if (req.body.nome != null)         res.autor.nome = req.body.nome;
   if (req.body.nacionalidade != null) res.autor.nacionalidade = req.body.nacionalidade;
   try {
@@ -45,7 +45,7 @@ router.put('/:id', autenticarApiKey, getAutor, async (req, res) => {
 });
 
 // DELETE /api/autores/:id
-router.delete('/:id', autenticarApiKey, getAutor, async (req, res) => {
+router.delete('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getAutor, async (req, res) => {
   try {
     await res.autor.deleteOne();
     res.json({ message: 'Autor excluído com sucesso!' });
