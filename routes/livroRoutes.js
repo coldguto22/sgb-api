@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const Livro = require('../models/livro');
-const { autenticarApiKey } = require('../middleware/auth');
+const LogOperacao = require('../models/logOperacao');
+const { autenticarApiKey, autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 const MAX_PAGE_SIZE = 50;
 
@@ -151,7 +152,7 @@ router.get('/:id', autenticarApiKey, getLivro, (req, res) => {
 });
 
 // POST /api/livros
-router.post('/', autenticarApiKey, async (req, res) => {
+router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   const livro = new Livro({
     titulo:                req.body.titulo,
     isbn:                  req.body.isbn,
@@ -164,7 +165,9 @@ router.post('/', autenticarApiKey, async (req, res) => {
     estantes:              req.body.estantes ?? [],
   });
   try {
+    if (!estoqueValido(livro)) return res.status(400).json({ message: 'Estoque indisponível não pode exceder o total.' });
     const novo = await livro.save();
+    await registrarAuditoria(req, 'CADASTRO_LIVRO', novo._id);
     res.status(201).json(novo);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -172,13 +175,15 @@ router.post('/', autenticarApiKey, async (req, res) => {
 });
 
 // PUT /api/livros/:id
-router.put('/:id', autenticarApiKey, getLivro, async (req, res) => {
+router.put('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getLivro, async (req, res) => {
   const campos = ['titulo', 'isbn', 'ano_publicacao', 'editora',
                   'quantidade_total', 'quantidade_disponivel',
                   'id_categoria', 'autores', 'estantes'];
   campos.forEach(c => { if (req.body[c] != null) res.livro[c] = req.body[c]; });
   try {
+    if (!estoqueValido(res.livro)) return res.status(400).json({ message: 'Estoque indisponível não pode exceder o total.' });
     const atualizado = await res.livro.save();
+    await registrarAuditoria(req, 'ATUALIZACAO_LIVRO', atualizado._id);
     res.json(atualizado);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -186,9 +191,10 @@ router.put('/:id', autenticarApiKey, getLivro, async (req, res) => {
 });
 
 // DELETE /api/livros/:id
-router.delete('/:id', autenticarApiKey, getLivro, async (req, res) => {
+router.delete('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getLivro, async (req, res) => {
   try {
     await res.livro.deleteOne();
+    await registrarAuditoria(req, 'EXCLUSAO_LIVRO', res.livro._id);
     res.json({ message: 'Livro excluído com sucesso!' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -206,6 +212,18 @@ async function getLivro(req, res, next) {
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
+}
+
+function estoqueValido(livro) {
+  return Number.isInteger(livro.quantidade_total) && Number.isInteger(livro.quantidade_disponivel) &&
+    livro.quantidade_total >= 1 && livro.quantidade_disponivel >= 0 &&
+    livro.quantidade_disponivel <= livro.quantidade_total;
+}
+
+async function registrarAuditoria(req, operacao, registroId) {
+  try {
+    await LogOperacao.create({ id_usuario: req.auth.userId, operacao, tabela_afetada: 'livros', registro_id: registroId.toString(), ip_usuario: req.ip || '0.0.0.0', user_agent: req.headers['user-agent'] });
+  } catch (_) {}
 }
 
 module.exports = router;

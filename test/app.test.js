@@ -295,7 +295,7 @@ describe('SGB API - Testes de Rotas', () => {
     it('Deve retornar erro ao criar livro sem título', async () => {
       const response = await request(app)
         .post('/api/livros')
-        .set('x-api-key', API_KEY)
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`)
         .send({ editora: 'Sem título' });
       expect(response.statusCode).toEqual(400);
       expect(response.body).toHaveProperty('message');
