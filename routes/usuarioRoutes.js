@@ -1,6 +1,8 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const Usuario = require('../models/usuario');
+const LogOperacao = require('../models/logOperacao');
 const { autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 // GET /api/usuarios
@@ -38,8 +40,8 @@ function escapeRegex(value) {
 }
 
 // GET /api/usuarios/:id
-router.get('/:id', autenticarUsuario, podeAcessarUsuario, getUsuario, (req, res) => {
-  res.json(res.usuario);
+router.get('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getUsuario, (req, res) => {
+  res.json(resumoUsuarioOperacional(res.usuario));
 });
 
 // POST /api/usuarios
@@ -54,23 +56,23 @@ router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, r
   });
   try {
     const novo = await usuario.save();
-    res.status(201).json(novo);
+    await registrarAuditoria(req, 'CADASTRO_USUARIO', novo._id);
+    res.status(201).json(resumoUsuarioOperacional(novo));
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
 });
 
 // PUT /api/usuarios/:id
-router.put('/:id', autenticarUsuario, podeAcessarUsuario, getUsuario, async (req, res) => {
-  if (req.body.nome != null)         res.usuario.nome = req.body.nome;
-  if (req.body.email != null)        res.usuario.email = req.body.email;
-  if (req.body.telefone != null)     res.usuario.telefone = req.body.telefone;
-  if (req.auth.role === 'Bibliotecario' && req.body.tipo_usuario != null) res.usuario.tipo_usuario = req.body.tipo_usuario;
-  if (req.auth.role === 'Bibliotecario' && req.body.status != null)       res.usuario.status = req.body.status;
-  if (req.body.senha != null)        res.usuario.senha = req.body.senha;
+router.put('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getUsuario, async (req, res) => {
+  const camposPermitidos = ['nome', 'email', 'telefone', 'tipo_usuario', 'status'];
+  camposPermitidos.forEach((campo) => {
+    if (req.body[campo] != null) res.usuario[campo] = req.body[campo];
+  });
   try {
     const atualizado = await res.usuario.save();
-    res.json(atualizado);
+    await registrarAuditoria(req, 'ATUALIZACAO_USUARIO', atualizado._id);
+    res.json(resumoUsuarioOperacional(atualizado));
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -92,6 +94,9 @@ function podeAcessarUsuario(req, res, next) {
 }
 
 async function getUsuario(req, res, next) {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: 'Identificador invalido.' });
+  }
   try {
     const usuario = await Usuario.findById(req.params.id);
     if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado' });
@@ -99,6 +104,21 @@ async function getUsuario(req, res, next) {
     next();
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+}
+
+async function registrarAuditoria(req, operacao, registroId) {
+  try {
+    await LogOperacao.create({
+      id_usuario: req.auth.userId,
+      operacao,
+      tabela_afetada: 'usuarios',
+      registro_id: registroId.toString(),
+      ip_usuario: req.ip || '0.0.0.0',
+      user_agent: req.headers['user-agent'],
+    });
+  } catch (_) {
+    // Auditoria nao desfaz uma alteracao ja persistida.
   }
 }
 
