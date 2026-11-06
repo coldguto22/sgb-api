@@ -25,6 +25,21 @@ router.get('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, re
   }
 });
 
+router.get('/exportar.csv', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  try {
+    const logs = await LogOperacao.find({})
+      .populate('id_usuario', 'nome tipo_usuario')
+      .sort({ data_hora: -1 });
+    const linhas = logs.map((log) => [
+      log._id, log.operacao, log.tabela_afetada, log.registro_id,
+      log.id_usuario?.nome || '', log.id_usuario?.tipo_usuario || '', log.data_hora,
+    ].map(valorCsv).join(','));
+    res.type('text/csv').attachment('auditoria.csv').send([
+      'id,operacao,tabela,registro_id,usuario,papel,data_hora', ...linhas,
+    ].join('\n'));
+  } catch (_) { res.status(500).json({ message: 'Não foi possível exportar a auditoria.' }); }
+});
+
 // GET /api/logs/:id
 router.get('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   try {
@@ -66,6 +81,12 @@ function resumoLog(log) {
     data_hora: log.data_hora,
     usuario: usuario._id ? { _id: usuario._id, nome: usuario.nome, tipo_usuario: usuario.tipo_usuario } : null,
   };
+}
+
+function valorCsv(valor) {
+  const texto = String(valor ?? '');
+  const seguro = /^[=+\-@]/.test(texto) ? `'${texto}` : texto;
+  return `"${seguro.replace(/"/g, '""')}"`;
 }
 
 // Logs são imutáveis — sem PUT nem DELETE (RLOG03)
