@@ -56,6 +56,13 @@ describe('SGB API - Testes de Rotas', () => {
     mocks.push(jest.spyOn(Andar, 'findById').mockImplementation((id) => createChainableMockQuery({ _id: id })));
     mocks.push(jest.spyOn(Estante, 'find').mockImplementation(() => createChainableMockQuery([])));
     mocks.push(jest.spyOn(Emprestimo, 'find').mockImplementation(() => createChainableMockQuery([])));
+    mocks.push(jest.spyOn(Emprestimo, 'findOne').mockResolvedValue(null));
+    mocks.push(jest.spyOn(Emprestimo, 'countDocuments').mockResolvedValue(0));
+    mocks.push(jest.spyOn(Emprestimo, 'findOneAndUpdate').mockResolvedValue(null));
+    mocks.push(jest.spyOn(Emprestimo.prototype, 'save').mockResolvedValue());
+    mocks.push(jest.spyOn(Livro, 'findOneAndUpdate').mockResolvedValue(null));
+    mocks.push(jest.spyOn(Livro, 'findByIdAndUpdate').mockResolvedValue(null));
+    mocks.push(jest.spyOn(LogOperacao, 'create').mockResolvedValue({}));
     mocks.push(jest.spyOn(Emprestimo, 'updateMany').mockResolvedValue({ acknowledged: true }));
     mocks.push(jest.spyOn(LogOperacao, 'find').mockImplementation(() => createChainableMockQuery([])));
   });
@@ -420,6 +427,78 @@ describe('SGB API - Testes de Rotas', () => {
         .send({ id_usuario: '000000000000000000000001', id_livro: '000000000000000000000002' });
       expect(response.statusCode).toBeGreaterThanOrEqual(400);
       expect(response.body).toHaveProperty('message');
+    });
+
+    it('recusa empréstimo quando não consegue reservar uma unidade disponível', async () => {
+      Usuario.findById.mockImplementationOnce(() => createChainableMockQuery({
+        _id: USER_ID, status: 'Ativo', tipo_usuario: 'Bibliotecario', token_version: 0,
+      })).mockImplementationOnce(() => createChainableMockQuery({
+        _id: USER_ID, status: 'Ativo', tipo_usuario: 'Aluno', token_version: 0,
+      }));
+      Livro.findOneAndUpdate.mockResolvedValueOnce(null);
+
+      const response = await request(app)
+        .post('/api/emprestimos')
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`)
+        .send({ id_usuario: USER_ID, id_livro: '64b000000000000000000010' });
+
+      expect(response.statusCode).toEqual(400);
+      expect(response.body.message).toContain('indisponível');
+      expect(Livro.findOneAndUpdate).toHaveBeenCalledWith(
+        { _id: '64b000000000000000000010', quantidade_disponivel: { $gt: 0 } },
+        { $inc: { quantidade_disponivel: -1 } },
+        { new: true },
+      );
+    });
+
+    it('define o prazo no servidor, sem aceitar prazo enviado pelo cliente', async () => {
+      Usuario.findById.mockImplementationOnce(() => createChainableMockQuery({
+        _id: USER_ID, status: 'Ativo', tipo_usuario: 'Bibliotecario', token_version: 0,
+      })).mockImplementationOnce(() => createChainableMockQuery({
+        _id: USER_ID, status: 'Ativo', tipo_usuario: 'Aluno', token_version: 0,
+        nome: 'Ana', email: 'ana@example.test',
+      }));
+      Livro.findOneAndUpdate.mockResolvedValueOnce({
+        _id: '64b000000000000000000010', titulo: 'Livro teste', isbn: '123',
+      });
+
+      const response = await request(app)
+        .post('/api/emprestimos')
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`)
+        .send({
+          id_usuario: USER_ID,
+          id_livro: '64b000000000000000000010',
+          data_prevista_devolucao: '2099-12-31T00:00:00.000Z',
+        });
+
+      expect(response.statusCode).toEqual(201);
+      expect(response.body).toMatchObject({
+        usuario: { _id: USER_ID, nome: 'Ana', tipo_usuario: 'Aluno' },
+        livro: { _id: '64b000000000000000000010', titulo: 'Livro teste', isbn: '123' },
+        status: 'Ativo',
+      });
+      expect(new Date(response.body.data_prevista_devolucao).getFullYear()).toBeLessThan(2099);
+    });
+
+    it('retorna somente o DTO operacional de empréstimos', async () => {
+      Emprestimo.find.mockImplementationOnce(() => createChainableMockQuery([{
+        _id: 'loan-1', status: 'Ativo', valor_multa: 0,
+        data_emprestimo: '2026-01-01T00:00:00.000Z',
+        data_prevista_devolucao: '2026-01-08T00:00:00.000Z',
+        id_usuario: { _id: USER_ID, nome: 'Ana', email: 'ana@example.test', cpf: '000.000.000-00', tipo_usuario: 'Aluno' },
+        id_livro: { _id: 'book-1', titulo: 'Livro teste', isbn: '123', editora: 'Interna' },
+      }]));
+
+      const response = await request(app)
+        .get('/api/emprestimos')
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`);
+
+      expect(response.statusCode).toEqual(200);
+      expect(response.body[0]).toEqual(expect.objectContaining({
+        usuario: { _id: USER_ID, nome: 'Ana', tipo_usuario: 'Aluno' },
+        livro: { _id: 'book-1', titulo: 'Livro teste', isbn: '123' },
+      }));
+      expect(response.body[0].usuario).not.toHaveProperty('cpf');
     });
   });
 
