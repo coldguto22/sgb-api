@@ -3,7 +3,7 @@ const router = express.Router();
 const Unidade = require('../models/unidade');
 const Andar = require('../models/andar');
 const mongoose = require('mongoose');
-const { autenticarApiKey } = require('../middleware/auth');
+const { autenticarApiKey, autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 const PUBLIC_UNIT_FIELDS = '_id nome endereco cidade uf latitude longitude status';
 
@@ -67,7 +67,7 @@ router.get('/:id/estantes', validateObjectId, async (req, res) => {
 });
 
 // POST /api/unidades
-router.post('/', autenticarApiKey, async (req, res) => {
+router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   const unidade = new Unidade({
     nome:                  req.body.nome,
     endereco:              req.body.endereco,
@@ -88,7 +88,7 @@ router.post('/', autenticarApiKey, async (req, res) => {
 });
 
 // PUT /api/unidades/:id
-router.put('/:id', autenticarApiKey, getUnidade, async (req, res) => {
+router.put('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getUnidade, async (req, res) => {
   const campos = ['nome', 'endereco', 'cidade', 'uf', 'cep',
                   'latitude', 'longitude', 'telefone', 'horario_funcionamento', 'status'];
   campos.forEach(c => { if (req.body[c] != null) res.unidade[c] = req.body[c]; });
@@ -101,7 +101,7 @@ router.put('/:id', autenticarApiKey, getUnidade, async (req, res) => {
 });
 
 // DELETE /api/unidades/:id
-router.delete('/:id', autenticarApiKey, getUnidade, async (req, res) => {
+router.delete('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getUnidade, async (req, res) => {
   try {
     await res.unidade.deleteOne();
     res.json({ message: 'Unidade excluída com sucesso!' });

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Estante = require('../models/estante');
 const Livro = require('../models/livro');
-const { autenticarApiKey } = require('../middleware/auth');
+const { autenticarApiKey, autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 router.get('/', autenticarApiKey, async (req, res) => {
   try {
@@ -28,7 +28,7 @@ router.get('/:id/livros', async (req, res) => {
 
 router.get('/:id', autenticarApiKey, getEstante, (req, res) => res.json(res.estante));
 
-router.post('/', autenticarApiKey, async (req, res) => {
+router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   const estante = new Estante({
     id_andar:        req.body.id_andar,
     codigo_estante:  req.body.codigo_estante,
@@ -47,7 +47,7 @@ router.post('/', autenticarApiKey, async (req, res) => {
   }
 });
 
-router.put('/:id', autenticarApiKey, getEstante, async (req, res) => {
+router.put('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getEstante, async (req, res) => {
   ['id_andar', 'codigo_estante', 'descricao', 'coordenada_x',
    'coordenada_y', 'largura', 'altura', 'tipo'].forEach(c => {
     if (req.body[c] != null) res.estante[c] = req.body[c];
@@ -56,7 +56,7 @@ router.put('/:id', autenticarApiKey, getEstante, async (req, res) => {
   catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-router.delete('/:id', autenticarApiKey, getEstante, async (req, res) => {
+router.delete('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getEstante, async (req, res) => {
   try {
     await res.estante.deleteOne();
     res.json({ message: 'Estante excluída com sucesso!' });
