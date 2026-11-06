@@ -19,6 +19,7 @@ const estanteRouter    = require('./routes/estanteRoutes');
 const logRouter        = require('./routes/logRoutes');
 const authRouter       = require('./routes/authRoutes');
 const relatorioRouter  = require('./routes/relatorioRoutes');
+const reservaRouter    = require('./routes/reservaRoutes');
 
 app.use('/api/auth',        authRouter);
 app.use('/api/categorias',  categoriaRouter);
@@ -31,6 +32,7 @@ app.use('/api/andares',     andarRouter);
 app.use('/api/estantes',    estanteRouter);
 app.use('/api/logs',        logRouter);
 app.use('/api/relatorios',  relatorioRouter);
+app.use('/api/reservas',    reservaRouter);
 
 // ── Rota raiz ──────────────────────────────────────────────
 app.get('/', (req, res) => {
