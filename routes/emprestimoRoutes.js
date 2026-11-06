@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Emprestimo = require('../models/emprestimo');
 const Livro = require('../models/livro');
 const Usuario = require('../models/usuario');
+const LogOperacao = require('../models/logOperacao');
 const { autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 const MULTA_DIARIA = parseFloat(process.env.MULTA_DIARIA || '2.00');
@@ -18,7 +20,7 @@ router.get('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, re
     const emprestimos = await Emprestimo.find()
       .populate('id_usuario', 'nome email tipo_usuario')
       .populate('id_livro', 'titulo isbn');
-    res.json(emprestimos);
+    res.json(emprestimos.map(resumoEmprestimoOperacional));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -79,6 +81,10 @@ router.get('/:id', autenticarUsuario, getEmprestimo, podeAcessarEmprestimo, (req
 
 // POST /api/emprestimos — Realiza novo empréstimo (RF06)
 router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  if (!saoObjectIdsValidos(req.body.id_usuario, req.body.id_livro)) {
+    return res.status(400).json({ message: 'Usuário ou livro inválido.' });
+  }
+
   try {
     const usuario = await Usuario.findById(req.body.id_usuario);
     if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado' });
@@ -100,29 +106,41 @@ router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, r
     if (emprestimosAtivos >= limite)
       return res.status(400).json({ message: `Limite de ${limite} empréstimos simultâneos atingido.` });
 
-    const livro = await Livro.findById(req.body.id_livro);
-    if (!livro) return res.status(404).json({ message: 'Livro não encontrado' });
-
-    // RE04: livro disponível
-    if (livro.quantidade_disponivel <= 0)
-      return res.status(400).json({ message: 'Livro indisponível para empréstimo.' });
-
     // RE01: prazo conforme tipo de usuário
     const prazoDias = usuario.tipo_usuario === 'Professor' ? PRAZO_PROFESSOR : PRAZO_ALUNO;
     const dataPrevista = new Date();
     dataPrevista.setDate(dataPrevista.getDate() + prazoDias);
 
+    // RE04: reserva uma unidade no próprio banco. Duas solicitações concorrentes
+    // não conseguem reduzir a disponibilidade abaixo de zero.
+    const livro = await Livro.findOneAndUpdate(
+      { _id: req.body.id_livro, quantidade_disponivel: { $gt: 0 } },
+      { $inc: { quantidade_disponivel: -1 } },
+      { new: true },
+    );
+    if (!livro) return res.status(400).json({ message: 'Livro indisponível para empréstimo.' });
+
     const emprestimo = new Emprestimo({
       id_usuario:              usuario._id,
       id_livro:                livro._id,
-      data_prevista_devolucao: req.body.data_prevista_devolucao || dataPrevista,
+      data_prevista_devolucao: dataPrevista,
     });
 
-    await emprestimo.save();
-    livro.quantidade_disponivel -= 1;
-    await livro.save();
+    try {
+      await emprestimo.save();
+    } catch (error) {
+      // Compensa a reserva se a criação não puder ser persistida.
+      await Livro.findByIdAndUpdate(livro._id, { $inc: { quantidade_disponivel: 1 } });
+      throw error;
+    }
 
-    res.status(201).json(emprestimo);
+    await registrarEvento(req, 'EMPRESTIMO', emprestimo._id);
+
+    res.status(201).json(resumoEmprestimoOperacional({
+      ...emprestimo.toObject(),
+      id_usuario: usuario,
+      id_livro: livro,
+    }));
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -134,8 +152,6 @@ router.put('/:id/devolver', autenticarUsuario, exigirPapeis('Bibliotecario'), ge
     return res.status(400).json({ message: 'Este empréstimo já foi finalizado.' });
 
   const hoje = new Date();
-  res.emprestimo.data_devolucao_efetiva = hoje;
-
   // RM01/RM02: cálculo de multa
   const prevista = new Date(res.emprestimo.data_prevista_devolucao);
   if (hoje > prevista) {
@@ -144,24 +160,80 @@ router.put('/:id/devolver', autenticarUsuario, exigirPapeis('Bibliotecario'), ge
     res.emprestimo.valor_multa = multa;
   }
 
-  res.emprestimo.status = 'Finalizado';
-
   try {
-    await res.emprestimo.save();
+    const devolvido = await Emprestimo.findOneAndUpdate(
+      { _id: res.emprestimo._id, status: { $ne: 'Finalizado' } },
+      {
+        $set: {
+          data_devolucao_efetiva: hoje,
+          status: 'Finalizado',
+          valor_multa: res.emprestimo.valor_multa,
+        },
+      },
+      { new: true },
+    );
+    if (!devolvido) return res.status(409).json({ message: 'Este empréstimo já foi finalizado.' });
 
-    // Devolve unidade ao estoque
+    // Incrementa o estoque somente quando a devolução foi efetivada.
     await Livro.findByIdAndUpdate(res.emprestimo.id_livro, {
       $inc: { quantidade_disponivel: 1 }
     });
+    await registrarEvento(req, 'DEVOLUCAO', devolvido._id);
 
     res.json({
       message: 'Devolução registrada com sucesso!',
-      emprestimo: res.emprestimo,
+      emprestimo: resumoEmprestimoOperacional({
+        ...devolvido.toObject(),
+        id_usuario: res.emprestimo.id_usuario,
+        id_livro: res.emprestimo.id_livro,
+      }),
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
+
+function saoObjectIdsValidos(...ids) {
+  return ids.every((id) => typeof id === 'string' && mongoose.Types.ObjectId.isValid(id));
+}
+
+function resumoEmprestimoOperacional(emprestimo) {
+  const usuario = emprestimo.id_usuario || {};
+  const livro = emprestimo.id_livro || {};
+  return {
+    _id: emprestimo._id,
+    data_emprestimo: emprestimo.data_emprestimo,
+    data_prevista_devolucao: emprestimo.data_prevista_devolucao,
+    data_devolucao_efetiva: emprestimo.data_devolucao_efetiva || null,
+    status: emprestimo.status,
+    valor_multa: emprestimo.valor_multa || 0,
+    usuario: {
+      _id: usuario._id,
+      nome: usuario.nome,
+      tipo_usuario: usuario.tipo_usuario,
+    },
+    livro: {
+      _id: livro._id,
+      titulo: livro.titulo,
+      isbn: livro.isbn,
+    },
+  };
+}
+
+async function registrarEvento(req, operacao, registroId) {
+  try {
+    await LogOperacao.create({
+      id_usuario: req.auth.userId,
+      operacao,
+      tabela_afetada: 'emprestimos',
+      registro_id: registroId.toString(),
+      ip_usuario: req.ip || '0.0.0.0',
+      user_agent: req.headers['user-agent'],
+    });
+  } catch (_) {
+    // Auditoria não deve desfazer uma operação de circulação já persistida.
+  }
+}
 
 // DELETE /api/emprestimos/:id
 router.delete('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getEmprestimo, async (req, res) => {

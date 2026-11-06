@@ -6,12 +6,36 @@ const { autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 // GET /api/usuarios
 router.get('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   try {
-    const usuarios = await Usuario.find();
-    res.json(usuarios);
+    const busca = typeof req.query.busca === 'string' ? req.query.busca.trim() : '';
+    if (busca.length === 1) {
+      return res.status(400).json({ message: 'Informe ao menos dois caracteres para buscar usuários.' });
+    }
+    const filtro = busca
+      ? { $or: [
+        { nome: { $regex: escapeRegex(busca), $options: 'i' } },
+        { email: { $regex: escapeRegex(busca), $options: 'i' } },
+      ] }
+      : {};
+    const usuarios = await Usuario.find(filtro);
+    res.json(usuarios.map(resumoUsuarioOperacional));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
+
+function resumoUsuarioOperacional(usuario) {
+  return {
+    _id: usuario._id,
+    nome: usuario.nome,
+    email: usuario.email,
+    tipo_usuario: usuario.tipo_usuario,
+    status: usuario.status,
+  };
+}
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 // GET /api/usuarios/:id
 router.get('/:id', autenticarUsuario, podeAcessarUsuario, getUsuario, (req, res) => {
