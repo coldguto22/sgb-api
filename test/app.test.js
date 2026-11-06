@@ -174,6 +174,34 @@ describe('SGB API - Testes de Rotas', () => {
       expect(response.statusCode).toEqual(200);
       expect(response.body).toBeInstanceOf(Array);
     });
+
+    it('lista usuários com DTO mínimo para a operação bibliotecária', async () => {
+      Usuario.find.mockResolvedValueOnce([{
+        _id: USER_ID,
+        nome: 'Ana',
+        email: 'ana@example.test',
+        cpf: '000.000.000-00',
+        telefone: '11999999999',
+        tipo_usuario: 'Aluno',
+        status: 'Ativo',
+        mfa_secret: 'omit',
+      }]);
+
+      const response = await request(app)
+        .get('/api/usuarios?busca=Ana')
+        .set('authorization', `Bearer ${BIBLIOTECARIO_TOKEN}`);
+
+      expect(response.statusCode).toEqual(200);
+      expect(response.body).toEqual([{
+        _id: USER_ID,
+        nome: 'Ana',
+        email: 'ana@example.test',
+        tipo_usuario: 'Aluno',
+        status: 'Ativo',
+      }]);
+      expect(response.body[0]).not.toHaveProperty('cpf');
+      expect(response.body[0]).not.toHaveProperty('mfa_secret');
+    });
   });
 
   describe('Autorização de usuários', () => {
