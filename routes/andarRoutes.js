@@ -3,7 +3,7 @@ const router = express.Router();
 const Andar = require('../models/andar');
 const Estante = require('../models/estante');
 const mongoose = require('mongoose');
-const { autenticarApiKey } = require('../middleware/auth');
+const { autenticarApiKey, autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 
 router.get('/', autenticarApiKey, async (req, res) => {
   try {
@@ -37,7 +37,7 @@ router.get('/:id/estantes', async (req, res) => {
   }
 });
 
-router.post('/', autenticarApiKey, async (req, res) => {
+router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   const andar = new Andar({
     id_unidade:    req.body.id_unidade,
     numero_andar:  req.body.numero_andar,
@@ -52,7 +52,7 @@ router.post('/', autenticarApiKey, async (req, res) => {
   }
 });
 
-router.put('/:id', autenticarApiKey, getAndar, async (req, res) => {
+router.put('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getAndar, async (req, res) => {
   ['id_unidade', 'numero_andar', 'nome_andar', 'descricao'].forEach(c => {
     if (req.body[c] != null) res.andar[c] = req.body[c];
   });
@@ -60,7 +60,7 @@ router.put('/:id', autenticarApiKey, getAndar, async (req, res) => {
   catch (err) { res.status(400).json({ message: err.message }); }
 });
 
-router.delete('/:id', autenticarApiKey, getAndar, async (req, res) => {
+router.delete('/:id', autenticarUsuario, exigirPapeis('Bibliotecario'), getAndar, async (req, res) => {
   try {
     await res.andar.deleteOne();
     res.json({ message: 'Andar excluído com sucesso!' });
