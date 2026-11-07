@@ -1,6 +1,7 @@
 const request = require('supertest');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { authenticator } = require('otplib');
 
 jest.mock('../services/passwordResetEmail', () => ({
   sendPasswordResetEmail: jest.fn(),
@@ -72,6 +73,28 @@ describe('Autenticação individual', () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.body).toEqual({ message: 'Credenciais inválidas.' });
+  });
+
+  it('exige um código TOTP válido quando MFA está ativo', async () => {
+    const secret = authenticator.generateSecret();
+    usuario.mfa_ativado = true;
+    usuario.mfa_secret = secret;
+    jest.spyOn(Usuario, 'findOne').mockReturnValue(query(usuario));
+
+    const invalid = await request(app)
+      .post('/api/auth/login')
+      .send({ email: usuario.email, senha, codigo_mfa: '000000' });
+    const valid = await request(app)
+      .post('/api/auth/login')
+      .send({
+        email: usuario.email,
+        senha,
+        codigo_mfa: authenticator.generate(secret),
+      });
+
+    expect(invalid.statusCode).toBe(401);
+    expect(invalid.body).toEqual({ message: 'Código de autenticação inválido.' });
+    expect(valid.statusCode).toBe(200);
   });
 
   it('rejeita token que foi revogado pela mudança de versão da sessão', async () => {
