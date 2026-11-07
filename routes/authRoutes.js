@@ -2,8 +2,9 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { authenticator } = require('otplib');
 const Usuario = require('../models/usuario');
-const { autenticarUsuario, criarTokenAcesso } = require('../middleware/auth');
+const { autenticarUsuario, criarTokenAcesso, exigirPapeis } = require('../middleware/auth');
 const { sendPasswordResetEmail } = require('../services/passwordResetEmail');
 
 const router = express.Router();
@@ -99,13 +100,16 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 
   try {
-    const usuario = await Usuario.findOne({ email }).select('+senha +token_version');
+    const usuario = await Usuario.findOne({ email }).select('+senha +token_version +mfa_secret');
     const senhaValida = usuario && await bcrypt.compare(senha, usuario.senha);
     if (!senhaValida) {
       return res.status(401).json({ message: 'Credenciais inválidas.' });
     }
     if (usuario.status !== 'Ativo') {
       return res.status(403).json({ message: 'Usuário não está ativo.' });
+    }
+    if (usuario.mfa_ativado && !authenticator.check(req.body.codigo_mfa || '', usuario.mfa_secret)) {
+      return res.status(401).json({ message: 'Código de autenticação inválido.' });
     }
 
     const accessToken = criarTokenAcesso(usuario);
@@ -121,6 +125,55 @@ router.post('/login', loginLimiter, async (req, res) => {
     });
   } catch (_) {
     return res.status(503).json({ message: 'Serviço de autenticação indisponível.' });
+  }
+});
+
+router.post('/mfa/provisionar', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  try {
+    const usuario = await Usuario.findById(req.auth.userId).select('+mfa_pending_secret');
+    if (!usuario) return res.status(401).json({ message: 'Sessão inválida ou expirada.' });
+    const secret = authenticator.generateSecret();
+    usuario.mfa_pending_secret = secret;
+    await usuario.save();
+    return res.json({
+      secret,
+      otpauth_url: authenticator.keyuri(usuario.email, 'SGB FATEC', secret),
+    });
+  } catch (_) {
+    return res.status(503).json({ message: 'Serviço MFA indisponível.' });
+  }
+});
+
+router.post('/mfa/ativar', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  const codigo = typeof req.body.codigo === 'string' ? req.body.codigo : '';
+  try {
+    const usuario = await Usuario.findById(req.auth.userId).select('+mfa_pending_secret +mfa_secret');
+    if (!usuario || !usuario.mfa_pending_secret || !authenticator.check(codigo, usuario.mfa_pending_secret)) {
+      return res.status(400).json({ message: 'Código MFA inválido.' });
+    }
+    usuario.mfa_secret = usuario.mfa_pending_secret;
+    usuario.mfa_pending_secret = null;
+    usuario.mfa_ativado = true;
+    await usuario.save();
+    return res.status(204).send();
+  } catch (_) {
+    return res.status(503).json({ message: 'Serviço MFA indisponível.' });
+  }
+});
+
+router.post('/mfa/desativar', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  const codigo = typeof req.body.codigo === 'string' ? req.body.codigo : '';
+  try {
+    const usuario = await Usuario.findById(req.auth.userId).select('+mfa_secret');
+    if (!usuario || !usuario.mfa_ativado || !authenticator.check(codigo, usuario.mfa_secret)) {
+      return res.status(400).json({ message: 'Código MFA inválido.' });
+    }
+    usuario.mfa_secret = null;
+    usuario.mfa_ativado = false;
+    await usuario.save();
+    return res.status(204).send();
+  } catch (_) {
+    return res.status(503).json({ message: 'Serviço MFA indisponível.' });
   }
 });
 

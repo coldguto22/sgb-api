@@ -40,10 +40,16 @@ const usuarioSchema = new mongoose.Schema({
   mfa_secret: {
     type: String,
     default: null,
+    select: false,
   },
   mfa_ativado: {
     type: Boolean,
     default: false,
+  },
+  mfa_pending_secret: {
+    type: String,
+    default: null,
+    select: false,
   },
   status: {
     type: String,
