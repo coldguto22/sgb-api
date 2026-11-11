@@ -17,7 +17,9 @@ const unidadeRouter    = require('./routes/unidadeRoutes');
 const andarRouter      = require('./routes/andarRoutes');
 const estanteRouter    = require('./routes/estanteRoutes');
 const logRouter        = require('./routes/logRoutes');
+const authRouter       = require('./routes/authRoutes');
 
+app.use('/api/auth',        authRouter);
 app.use('/api/categorias',  categoriaRouter);
 app.use('/api/autores',     autorRouter);
 app.use('/api/usuarios',    usuarioRouter);
@@ -35,6 +37,8 @@ app.get('/', (req, res) => {
     versao: '2.0',
     instituicao: 'FATEC Mauá',
     endpoints: [
+      '/api/auth/recuperacao-senha',
+      '/api/auth/recuperacao-senha/confirmar',
       '/api/categorias', '/api/autores', '/api/usuarios',
       '/api/livros', '/api/emprestimos', '/api/unidades',
       '/api/andares', '/api/estantes', '/api/logs'

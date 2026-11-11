@@ -43,7 +43,11 @@ router.put('/:id', autenticarApiKey, getUsuario, async (req, res) => {
   if (req.body.telefone != null)     res.usuario.telefone = req.body.telefone;
   if (req.body.tipo_usuario != null) res.usuario.tipo_usuario = req.body.tipo_usuario;
   if (req.body.status != null)       res.usuario.status = req.body.status;
-  if (req.body.senha != null)        res.usuario.senha = req.body.senha;
+  if (req.body.senha != null) {
+    res.usuario.senha = req.body.senha;
+    res.usuario.password_reset_token_hash = null;
+    res.usuario.password_reset_expires_at = null;
+  }
   try {
     const atualizado = await res.usuario.save();
     res.json(atualizado);

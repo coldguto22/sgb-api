@@ -26,6 +26,17 @@ const usuarioSchema = new mongoose.Schema({
     required: true,
     minlength: 6,
   },
+  password_reset_token_hash: {
+    type: String,
+    default: null,
+    select: false,
+    index: true,
+  },
+  password_reset_expires_at: {
+    type: Date,
+    default: null,
+    select: false,
+  },
   telefone: {
     type: String,
     default: null,
@@ -67,6 +78,8 @@ usuarioSchema.methods.toJSON = function () {
   const obj = this.toObject();
   delete obj.senha;
   delete obj.mfa_secret;
+  delete obj.password_reset_token_hash;
+  delete obj.password_reset_expires_at;
   return obj;
 };
 

@@ -34,6 +34,8 @@ npm test
 | GET | /api/unidades/:id/andares | Lista andares da unidade (público) |
 | GET | /api/andares/:id/estantes | Lista estantes do andar (público) |
 | GET | /api/logs | Consulta logs (requer API Key) |
+| POST | /api/auth/recuperacao-senha | Solicita instruções por e-mail (resposta genérica) |
+| POST | /api/auth/recuperacao-senha/confirmar | Redefine senha com token válido |
 
 Autenticação via header `x-api-key`.
 
@@ -47,4 +49,24 @@ necessários ao app:
 
 Ambas retornam `400` para IDs malformados e `404` quando a unidade ou o andar
 não existe. Recurso existente sem filhos retorna `200` com uma lista vazia.
+
+## Recuperação de senha
+
+Configure as variáveis abaixo no ambiente da API. `SMTP_URL` pode ser usada no
+lugar de `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` e `SMTP_PASS`.
+
+| Variável | Finalidade |
+|---|---|
+| `MAIL_FROM` | Endereço remetente validado no provedor de e-mail |
+| `PASSWORD_RESET_URL` | Página HTTPS para orientar a redefinição; o código é enviado separadamente no e-mail |
+| `SMTP_URL` | URL SMTP completa, se fornecida pelo provedor |
+| `SMTP_HOST` | Host SMTP, quando não usar `SMTP_URL` |
+| `SMTP_PORT` | Porta SMTP; padrão `587` |
+| `SMTP_USER` | Usuário SMTP |
+| `SMTP_PASS` | Senha ou app password SMTP |
+
+O código expira após 30 minutos, só pode ser usado uma vez e é armazenado no
+MongoDB apenas como hash. O endpoint de solicitação sempre retorna a mesma
+resposta para não revelar se um endereço está cadastrado. O app Flutter já
+solicita esses dois caminhos e permite informar o código manualmente.
 
