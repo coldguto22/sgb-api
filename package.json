@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "seed:demo-catalog": "node scripts/seedDemoCatalog.js",
     "test": "jest --detectOpenHandles --forceExit"
   },
   "dependencies": {
