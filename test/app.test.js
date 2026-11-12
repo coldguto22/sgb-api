@@ -15,6 +15,8 @@ const Andar = require('../models/andar');
 const Estante = require('../models/estante');
 const Emprestimo = require('../models/emprestimo');
 const LogOperacao = require('../models/logOperacao');
+const Notificacao = require('../models/notificacao');
+const DispositivoNotificacao = require('../models/dispositivoNotificacao');
 const USER_ID = '64b000000000000000000001';
 const BIBLIOTECARIO_TOKEN = jwt.sign(
   { role: 'Bibliotecario', version: 0 }, process.env.JWT_SECRET,
@@ -65,6 +67,8 @@ describe('SGB API - Testes de Rotas', () => {
     mocks.push(jest.spyOn(LogOperacao, 'create').mockResolvedValue({}));
     mocks.push(jest.spyOn(Emprestimo, 'updateMany').mockResolvedValue({ acknowledged: true }));
     mocks.push(jest.spyOn(LogOperacao, 'find').mockImplementation(() => createChainableMockQuery([])));
+    mocks.push(jest.spyOn(Notificacao, 'create').mockResolvedValue({}));
+    mocks.push(jest.spyOn(DispositivoNotificacao, 'find').mockImplementation(() => createChainableMockQuery([])));
   });
 
   afterAll(() => {

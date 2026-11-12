@@ -6,6 +6,7 @@ const Livro = require('../models/livro');
 const Usuario = require('../models/usuario');
 const LogOperacao = require('../models/logOperacao');
 const { autenticarUsuario, exigirPapeis } = require('../middleware/auth');
+const { criarNotificacao } = require('../services/notificacaoService');
 
 const MULTA_DIARIA = parseFloat(process.env.MULTA_DIARIA || '2.00');
 const MULTA_MAXIMA = parseFloat(process.env.MULTA_MAXIMA || '50.00');
@@ -135,6 +136,12 @@ router.post('/', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, r
     }
 
     await registrarEvento(req, 'EMPRESTIMO', emprestimo._id);
+    await criarNotificacao({
+      idUsuario: usuario._id,
+      titulo: 'Empréstimo registrado',
+      mensagem: `O empréstimo de "${livro.titulo}" foi registrado.`,
+      tipo: 'Emprestimo',
+    });
 
     res.status(201).json(resumoEmprestimoOperacional({
       ...emprestimo.toObject(),
@@ -179,6 +186,14 @@ router.put('/:id/devolver', autenticarUsuario, exigirPapeis('Bibliotecario'), ge
       $inc: { quantidade_disponivel: 1 }
     });
     await registrarEvento(req, 'DEVOLUCAO', devolvido._id);
+    const idUsuario = res.emprestimo.id_usuario?._id || res.emprestimo.id_usuario;
+    const tituloLivro = res.emprestimo.id_livro?.titulo || 'o livro';
+    await criarNotificacao({
+      idUsuario,
+      titulo: 'Devolução registrada',
+      mensagem: `A devolução de "${tituloLivro}" foi registrada.`,
+      tipo: 'Emprestimo',
+    });
 
     res.json({
       message: 'Devolução registrada com sucesso!',
