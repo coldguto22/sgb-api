@@ -48,3 +48,12 @@ necessários ao app:
 Ambas retornam `400` para IDs malformados e `404` quando a unidade ou o andar
 não existe. Recurso existente sem filhos retorna `200` com uma lista vazia.
 
+## Notificações push (Firebase)
+
+A API recebe a instalação autenticada em `PUT /api/notificacoes/dispositivos` e
+usa o Firebase Cloud Messaging para avisos de reserva, empréstimo e devolução.
+O servidor exige Node 22 e a variável secreta `FIREBASE_SERVICE_ACCOUNT_JSON`,
+com o JSON completo da chave da conta de serviço. No Render, cadastre-a em
+**Environment > Environment Variables**; não crie arquivo de chave, não a
+versione e não a inclua em logs, Issues ou Pull Requests.
+

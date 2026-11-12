@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const Reserva = require('../models/reserva');
 const Livro = require('../models/livro');
 const { autenticarUsuario } = require('../middleware/auth');
+const { criarNotificacao } = require('../services/notificacaoService');
 
 router.get('/minhas', autenticarUsuario, async (req, res) => {
   try {
@@ -19,6 +20,12 @@ router.post('/', autenticarUsuario, async (req, res) => {
     if (!livro) return res.status(404).json({ message: 'Livro não encontrado.' });
     if (livro.quantidade_disponivel > 0) return res.status(400).json({ message: 'O livro está disponível; não é necessário reservar.' });
     const reserva = await Reserva.create({ id_usuario: req.auth.userId, id_livro: livro._id });
+    await criarNotificacao({
+      idUsuario: req.auth.userId,
+      titulo: 'Reserva registrada',
+      mensagem: `Sua reserva de "${livro.titulo}" foi registrada.`,
+      tipo: 'Reserva',
+    });
     res.status(201).json(resumo({ ...reserva.toObject(), id_livro: livro }));
   } catch (error) {
     if (error?.code === 11000) return res.status(409).json({ message: 'Já existe uma reserva ativa para este livro.' });
