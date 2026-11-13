@@ -3,7 +3,8 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const Reserva = require('../models/reserva');
 const Livro = require('../models/livro');
-const { autenticarUsuario } = require('../middleware/auth');
+const Usuario = require('../models/usuario');
+const { autenticarUsuario, exigirPapeis } = require('../middleware/auth');
 const { criarNotificacao } = require('../services/notificacaoService');
 
 router.get('/minhas', autenticarUsuario, async (req, res) => {
@@ -14,6 +15,19 @@ router.get('/minhas', autenticarUsuario, async (req, res) => {
     res.json(reservas.map(resumo));
   } catch (_) {
     res.status(500).json({ message: 'Não foi possível consultar reservas.' });
+  }
+});
+
+router.get('/operacionais', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  try {
+    await liberarReservasExpiradas();
+    const reservas = await Reserva.find({ status: 'Ativa' })
+      .populate('id_livro', 'titulo isbn')
+      .populate('id_usuario', 'nome tipo_usuario')
+      .sort({ data_limite_retirada: 1, createdAt: -1 });
+    return res.json(reservas.map(resumoOperacional));
+  } catch (_) {
+    return res.status(500).json({ message: 'Não foi possível consultar reservas operacionais.' });
   }
 });
 
@@ -51,6 +65,10 @@ router.post('/', autenticarUsuario, async (req, res) => {
       mensagem: `"${livro.titulo}" está separado para você retirar em até dois dias.`,
       tipo: 'Reserva',
     });
+    await notificarBibliotecarios({
+      titulo: 'Nova retirada agendada',
+      mensagem: `"${livro.titulo}" foi separado para retirada.`,
+    });
     return res.status(201).json(resumo({ ...reserva.toObject(), id_livro: livro }));
   } catch (error) {
     if (error?.code === 11000) {
@@ -73,6 +91,10 @@ async function criarReservaFila(req, res) {
     titulo: 'Reserva em fila registrada',
     mensagem: `Você entrou na fila de reserva de "${livro.titulo}".`,
     tipo: 'Reserva',
+  });
+  await notificarBibliotecarios({
+    titulo: 'Nova reserva em fila',
+    mensagem: `Há uma nova reserva em fila para "${livro.titulo}".`,
   });
   return res.status(201).json(resumo({ ...reserva.toObject(), id_livro: livro }));
 }
@@ -111,6 +133,25 @@ async function liberarReservasExpiradas() {
   }
 }
 
+async function notificarBibliotecarios({ titulo, mensagem }) {
+  try {
+    const bibliotecarios = await Usuario.find({
+      tipo_usuario: 'Bibliotecario',
+      status: 'Ativo',
+    }).select('_id');
+    await Promise.all(
+      bibliotecarios.map((usuario) => criarNotificacao({
+        idUsuario: usuario._id,
+        titulo,
+        mensagem,
+        tipo: 'Reserva',
+      })),
+    );
+  } catch (_) {
+    // Uma falha de aviso não pode desfazer uma reserva já registrada.
+  }
+}
+
 function resumo(reserva) {
   const livro = reserva.id_livro || {};
   return {
@@ -120,6 +161,19 @@ function resumo(reserva) {
     createdAt: reserva.createdAt,
     data_limite_retirada: reserva.data_limite_retirada || null,
     livro: { _id: livro._id, titulo: livro.titulo, isbn: livro.isbn },
+  };
+}
+
+function resumoOperacional(reserva) {
+  const base = resumo(reserva);
+  const usuario = reserva.id_usuario || {};
+  return {
+    ...base,
+    usuario: {
+      _id: usuario._id,
+      nome: usuario.nome,
+      tipo_usuario: usuario.tipo_usuario,
+    },
   };
 }
 
