@@ -109,7 +109,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     if (usuario.status !== 'Ativo') {
       return res.status(403).json({ message: 'Usuário não está ativo.' });
     }
-    if (usuario.mfa_ativado && !authenticator.check(req.body.codigo_mfa || '', usuario.mfa_secret)) {
+    if (usuario.mfa_ativado && !req.body.codigo_mfa) {
+      return res.status(428).json({ mfa_required: true });
+    }
+    if (usuario.mfa_ativado && !authenticator.check(req.body.codigo_mfa, usuario.mfa_secret)) {
       return res.status(401).json({ message: 'Código de autenticação inválido.' });
     }
 
