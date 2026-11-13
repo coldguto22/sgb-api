@@ -58,6 +58,47 @@ router.post('/:id/livros', autenticarUsuario, exigirPapeis('Bibliotecario'), asy
   }
 });
 
+// PUT /api/estantes/:id/livros/:livroId/mover — troca a localização física do título.
+router.put('/:id/livros/:livroId/mover', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  const destinoId = req.body.id_estante_destino;
+  if (!mongoose.Types.ObjectId.isValid(req.params.id) ||
+      !mongoose.Types.ObjectId.isValid(req.params.livroId) ||
+      !mongoose.Types.ObjectId.isValid(destinoId)) {
+    return res.status(400).json({ message: 'Estante de origem, destino ou livro inválido.' });
+  }
+  if (req.params.id === destinoId) {
+    return res.status(400).json({ message: 'A estante de destino deve ser diferente da origem.' });
+  }
+
+  try {
+    const [origem, destino, livro] = await Promise.all([
+      Estante.findById(req.params.id),
+      Estante.findById(destinoId),
+      Livro.findById(req.params.livroId),
+    ]);
+    if (!origem || !destino || !livro) {
+      return res.status(404).json({ message: 'Estante ou livro não encontrado.' });
+    }
+    if (!livro.estantes.some((id) => id.equals(origem._id))) {
+      return res.status(409).json({ message: 'O livro não está associado à estante de origem.' });
+    }
+
+    livro.estantes = livro.estantes.filter((id) => !id.equals(origem._id));
+    if (!livro.estantes.some((id) => id.equals(destino._id))) {
+      livro.estantes.push(destino._id);
+    }
+    await livro.save();
+    return res.json({
+      livro_id: livro._id,
+      estante_origem_id: origem._id,
+      estante_destino_id: destino._id,
+      movido: true,
+    });
+  } catch (_) {
+    return res.status(500).json({ message: 'Não foi possível mover o livro entre estantes.' });
+  }
+});
+
 // DELETE /api/estantes/:id/livros/:livroId — remove apenas a associação física.
 router.delete('/:id/livros/:livroId', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(req.params.id) ||
