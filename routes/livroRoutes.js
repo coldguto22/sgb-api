@@ -72,6 +72,33 @@ function toCatalogItem(livro) {
 }
 
 // GET /api/livros — Lista todos os livros (com populate de categoria e autores)
+// GET /api/livros/gerenciamento — lista enxuta, paginada e pesquisável para bibliotecários.
+router.get('/gerenciamento', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  const pagina = parsePositiveInteger(req.query.pagina, 1);
+  const limite = Math.min(parsePositiveInteger(req.query.limite, 20), MAX_PAGE_SIZE);
+  const busca = typeof req.query.busca === 'string' ? req.query.busca.trim() : '';
+  const filtro = busca
+    ? { $or: [{ titulo: { $regex: escapeRegex(busca), $options: 'i' } }, { isbn: busca }] }
+    : {};
+  try {
+    const [livros, total] = await Promise.all([
+      Livro.find(filtro)
+        .select('_id titulo isbn quantidade_total quantidade_disponivel')
+        .sort({ titulo: 1 })
+        .skip((pagina - 1) * limite)
+        .limit(limite),
+      Livro.countDocuments(filtro),
+    ]);
+    return res.json({ items: livros, pagina, limite, total });
+  } catch (_) {
+    return res.status(500).json({ message: 'Não foi possível carregar o acervo.' });
+  }
+});
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 router.get('/', autenticarApiKey, async (req, res) => {
   try {
     const livros = await Livro.find()
