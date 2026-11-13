@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const Estante = require('../models/estante');
 const Livro = require('../models/livro');
 const { autenticarApiKey, autenticarUsuario, exigirPapeis } = require('../middleware/auth');
@@ -23,6 +24,55 @@ router.get('/:id/livros', async (req, res) => {
     res.json(livros);
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/estantes/:id/livros — associa um título já existente à estante.
+router.post('/:id/livros', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id) ||
+      !mongoose.Types.ObjectId.isValid(req.body.id_livro)) {
+    return res.status(400).json({ message: 'Estante ou livro inválido.' });
+  }
+
+  try {
+    const [estante, livro] = await Promise.all([
+      Estante.findById(req.params.id),
+      Livro.findById(req.body.id_livro),
+    ]);
+    if (!estante || !livro) {
+      return res.status(404).json({ message: 'Estante ou livro não encontrado.' });
+    }
+
+    const jaAssociado = livro.estantes.some((id) => id.equals(estante._id));
+    if (!jaAssociado) {
+      livro.estantes.push(estante._id);
+      await livro.save();
+    }
+    return res.status(jaAssociado ? 200 : 201).json({
+      livro_id: livro._id,
+      estante_id: estante._id,
+      associado: true,
+    });
+  } catch (_) {
+    return res.status(500).json({ message: 'Não foi possível associar o livro à estante.' });
+  }
+});
+
+// DELETE /api/estantes/:id/livros/:livroId — remove apenas a associação física.
+router.delete('/:id/livros/:livroId', autenticarUsuario, exigirPapeis('Bibliotecario'), async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id) ||
+      !mongoose.Types.ObjectId.isValid(req.params.livroId)) {
+    return res.status(400).json({ message: 'Estante ou livro inválido.' });
+  }
+
+  try {
+    const livro = await Livro.findById(req.params.livroId);
+    if (!livro) return res.status(404).json({ message: 'Livro não encontrado.' });
+    livro.estantes.pull(req.params.id);
+    await livro.save();
+    return res.json({ livro_id: livro._id, estante_id: req.params.id, associado: false });
+  } catch (_) {
+    return res.status(500).json({ message: 'Não foi possível remover o livro da estante.' });
   }
 });
 
