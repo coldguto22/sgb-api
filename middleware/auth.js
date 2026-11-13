@@ -36,6 +36,22 @@ function criarTokenAcesso(usuario) {
   );
 }
 
+function criarTokenRenovacao(usuario) {
+  const secret = jwtSecret();
+  if (!secret) throw new Error('JWT_SECRET não configurado');
+  return jwt.sign(
+    { type: 'refresh', version: usuario.token_version || 0 },
+    secret,
+    {
+      algorithm: 'HS256',
+      subject: usuario._id.toString(),
+      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
+      issuer: 'sgb-api',
+      audience: 'sgb-flutter',
+    },
+  );
+}
+
 async function autenticarUsuario(req, res, next) {
   const authorization = req.headers.authorization;
   if (!authorization?.startsWith('Bearer ')) {
@@ -88,5 +104,6 @@ module.exports = {
   autenticarApiKey,
   autenticarUsuario,
   criarTokenAcesso,
+  criarTokenRenovacao,
   exigirPapeis,
 };

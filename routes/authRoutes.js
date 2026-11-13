@@ -2,9 +2,10 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
 const { authenticator } = require('otplib');
 const Usuario = require('../models/usuario');
-const { autenticarUsuario, criarTokenAcesso, exigirPapeis } = require('../middleware/auth');
+const { autenticarUsuario, criarTokenAcesso, criarTokenRenovacao, exigirPapeis } = require('../middleware/auth');
 const { sendPasswordResetEmail } = require('../services/passwordResetEmail');
 
 const router = express.Router();
@@ -113,8 +114,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     const accessToken = criarTokenAcesso(usuario);
+    const refreshToken = criarTokenRenovacao(usuario);
     return res.json({
       access_token: accessToken,
+      refresh_token: refreshToken,
       token_type: 'Bearer',
       expires_in: 900,
       user: {
@@ -125,6 +128,32 @@ router.post('/login', loginLimiter, async (req, res) => {
     });
   } catch (_) {
     return res.status(503).json({ message: 'Serviço de autenticação indisponível.' });
+  }
+});
+
+router.post('/renovar-sessao', async (req, res) => {
+  const refreshToken = typeof req.body.refresh_token === 'string'
+    ? req.body.refresh_token
+    : '';
+  if (!refreshToken) return res.status(400).json({ message: 'Token de renovação obrigatório.' });
+  try {
+    const payload = jwt.verify(refreshToken, process.env.JWT_SECRET, {
+      algorithms: ['HS256'], issuer: 'sgb-api', audience: 'sgb-flutter',
+    });
+    if (payload.type !== 'refresh') throw new Error('Tipo de token inválido');
+    const usuario = await Usuario.findById(payload.sub).select('+token_version');
+    if (!usuario || usuario.status !== 'Ativo' || usuario.token_version !== payload.version) {
+      return res.status(401).json({ message: 'Sessão inválida ou expirada.' });
+    }
+    return res.json({
+      access_token: criarTokenAcesso(usuario),
+      refresh_token: criarTokenRenovacao(usuario),
+      token_type: 'Bearer',
+      expires_in: 900,
+      user: { id: usuario._id, nome: usuario.nome, tipo_usuario: usuario.tipo_usuario },
+    });
+  } catch (_) {
+    return res.status(401).json({ message: 'Sessão inválida ou expirada.' });
   }
 });
 
