@@ -1,0 +1,13 @@
+services:
+  api:
+    command: sh -c 'node security-lab/seed.js && node --import @contrast/agent app.js'
+    environment:
+      CONTRAST__API__TOKEN: ${CONTRAST__API__TOKEN:?Credencial Contrast obrigatória}
+      CONTRAST__APPLICATION__NAME: sgb-api-security-lab
+      CONTRAST__SERVER__ENVIRONMENT: development
+    networks: [lab, telemetry]
+  traffic:
+    environment:
+      SECURITY_PROXY: ''
+networks:
+  telemetry: {}

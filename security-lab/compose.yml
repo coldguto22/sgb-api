@@ -1,0 +1,50 @@
+services:
+  mongo:
+    image: mongo:7
+    networks: [lab]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  api:
+    image: sgb-api-security-lab:local
+    build:
+      context: ..
+      dockerfile: security-lab/Dockerfile
+    working_dir: /app
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://mongo:27017/sgb_security_lab
+      JWT_SECRET: laboratory-only-random-secret-not-for-production
+      API_KEY_SECRET: laboratory-only-api-key
+      BCRYPT_ROUNDS: '10'
+    command: sh -c 'node security-lab/seed.js && node app.js'
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks: [lab]
+  zap:
+    image: ghcr.io/zaproxy/zaproxy:stable
+    command: zap.sh -daemon -host 0.0.0.0 -port 8080 -config api.disablekey=true -config api.addrs.addr.name=.* -config api.addrs.addr.regex=true
+    networks: [lab]
+  traffic:
+    image: node:22
+    working_dir: /app
+    volumes:
+      - ..:/app:ro
+    environment:
+      SECURITY_PROXY: http://zap:8080
+    command: node security-lab/traffic.js
+    networks: [lab]
+  report:
+    image: node:22
+    working_dir: /app
+    volumes:
+      - ..:/app:ro
+      - ./reports:/reports
+    command: node security-lab/zap-report.js
+    networks: [lab]
+networks:
+  lab:
+    internal: true

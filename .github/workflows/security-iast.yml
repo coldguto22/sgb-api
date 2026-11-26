@@ -1,0 +1,37 @@
+name: IAST - laboratorio autorizado
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contrast-assess:
+    if: github.ref == 'refs/heads/master'
+    environment: security-iast
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CONTRAST__API__TOKEN: ${{ secrets.CONTRAST_AGENT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Exigir credencial autorizada
+        run: test -n "$CONTRAST__API__TOKEN"
+      - run: npm ci
+      - name: Iniciar API instrumentada com banco descartavel
+        run: docker compose -p sgb-iast-ci -f security-lab/compose.yml -f security-lab/compose.iast.yml up --build -d mongo api
+      - name: Executar fluxos contra o processo instrumentado
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if docker compose -p sgb-iast-ci -f security-lab/compose.yml -f security-lab/compose.iast.yml run --rm --no-deps traffic; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+      - name: Lembrar verificacao de sinais
+        run: echo 'Confirme a inicializacao do agente e a cobertura dos endpoints no painel Contrast Assess; a execucao dos fluxos nao comprova coleta de sinais.'
+      - name: Remover laboratorio descartavel
+        if: always()
+        run: docker compose -p sgb-iast-ci -f security-lab/compose.yml -f security-lab/compose.iast.yml down --volumes --remove-orphans
