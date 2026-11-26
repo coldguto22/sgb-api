@@ -21,7 +21,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Subir laboratorio isolado
-        run: docker compose -p sgb-security-ci -f security-lab/compose.yml up -d mongo api zap
+        run: docker compose -p sgb-security-ci -f security-lab/compose.yml up --build -d mongo api zap
       - name: Exercitar rotas pelo ZAP
         shell: bash
         run: |

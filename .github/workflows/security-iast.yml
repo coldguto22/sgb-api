@@ -21,7 +21,7 @@ jobs:
         run: test -n "$CONTRAST__API__TOKEN"
       - run: npm ci
       - name: Iniciar API instrumentada com banco descartavel
-        run: docker compose -p sgb-iast-ci -f security-lab/compose.yml -f security-lab/compose.iast.yml up -d mongo api
+        run: docker compose -p sgb-iast-ci -f security-lab/compose.yml -f security-lab/compose.iast.yml up --build -d mongo api
       - name: Executar fluxos contra o processo instrumentado
         shell: bash
         run: |

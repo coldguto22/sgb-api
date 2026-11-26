@@ -1,13 +1,15 @@
 # Verificações dinâmicas de segurança
 
 O laboratório usa MongoDB descartável e identidade sintética, sem conexão com
-Render ou Atlas. Os comandos abaixo devem ser executados na raiz da API após
-`npm ci`. O Docker precisa estar ativo. Não use credenciais reais no laboratório.
+Render ou Atlas. O arquivo `security-lab/Dockerfile` constrói a imagem local
+`sgb-api-security-lab:local` com as dependências da API. Os comandos devem ser
+executados na raiz da API, com o Docker ativo e acesso para baixar as imagens
+públicas de Node, MongoDB e ZAP. Não use credenciais reais no laboratório.
 
 ## DAST passivo
 
 ```bash
-docker compose -p sgb-security-lab -f security-lab/compose.yml up -d mongo api zap
+docker compose -p sgb-security-lab -f security-lab/compose.yml up --build -d mongo api zap
 docker compose -p sgb-security-lab -f security-lab/compose.yml run --rm --no-deps traffic
 docker compose -p sgb-security-lab -f security-lab/compose.yml run --rm --no-deps report
 docker compose -p sgb-security-lab -f security-lab/compose.yml down --volumes --remove-orphans
@@ -45,7 +47,7 @@ não comprova coleta. Não publique logs brutos do agente como artefatos.
 Para executar localmente, forneça `CONTRAST__API__TOKEN` no ambiente e use:
 
 ```bash
-docker compose -p sgb-iast-lab -f security-lab/compose.yml -f security-lab/compose.iast.yml up -d mongo api
+docker compose -p sgb-iast-lab -f security-lab/compose.yml -f security-lab/compose.iast.yml up --build -d mongo api
 docker compose -p sgb-iast-lab -f security-lab/compose.yml -f security-lab/compose.iast.yml run --rm --no-deps traffic
 docker compose -p sgb-iast-lab -f security-lab/compose.yml -f security-lab/compose.iast.yml down --volumes --remove-orphans
 ```

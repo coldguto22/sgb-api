@@ -8,10 +8,11 @@ services:
       timeout: 5s
       retries: 30
   api:
-    image: node:22
+    image: sgb-api-security-lab:local
+    build:
+      context: ..
+      dockerfile: security-lab/Dockerfile
     working_dir: /app
-    volumes:
-      - ..:/app
     environment:
       NODE_ENV: development
       MONGODB_URI: mongodb://mongo:27017/sgb_security_lab
