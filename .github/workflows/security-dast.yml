@@ -1,0 +1,44 @@
+name: DAST passivo - laboratorio
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  zap-passive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Subir laboratorio isolado
+        run: docker compose -p sgb-security-ci -f security-lab/compose.yml up -d mongo api zap
+      - name: Exercitar rotas pelo ZAP
+        shell: bash
+        run: |
+          for i in {1..30}; do
+            if docker compose -p sgb-security-ci -f security-lab/compose.yml run --rm --no-deps traffic; then exit 0; fi
+            sleep 5
+          done
+          exit 1
+      - name: Esperar analise passiva e gerar relatorio sanitizado
+        run: docker compose -p sgb-security-ci -f security-lab/compose.yml run --rm --no-deps report
+      - name: Publicar achados para triagem
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-passive
+          path: security-lab/reports/zap-passive.json
+          if-no-files-found: error
+      - name: Remover laboratorio descartavel
+        if: always()
+        run: docker compose -p sgb-security-ci -f security-lab/compose.yml down --volumes --remove-orphans
